@@ -166,7 +166,7 @@ async function migrateExistingData() {
   }
 }
 
-// API Routes
+// API Routes - All routes are prefixed with /api for Vercel deployment
 
 // Mock data for demo mode
 const mockThreads = [
@@ -220,8 +220,8 @@ const mockThreads = [
   }
 ];
 
-// GET /threads - Fetch all threads with calculated fields and optional filtering
-app.get('/threads', async (req, res) => {
+// GET /api/threads - Fetch all threads with calculated fields and optional filtering
+app.get('/api/threads', async (req, res) => {
   try {
     // If database is not connected, return mock data
     if (!dbConnected || !pool) {
@@ -353,8 +353,8 @@ function formatRelativeTime(secondsAgo) {
   }
 }
 
-// POST /threads - Add new message with upsert logic and automated calculations
-app.post('/threads', async (req, res) => {
+// POST /api/threads - Add new message with upsert logic and automated calculations
+app.post('/api/threads', async (req, res) => {
   try {
     const { operator, thread_id, model, type, message, converted } = req.body;
     
@@ -503,8 +503,8 @@ async function updateThreadCalculations(client, threadId) {
   }
 }
 
-// GET /stats - Get aggregated statistics for header
-app.get('/stats', async (req, res) => {
+// GET /api/stats - Get aggregated statistics for header
+app.get('/api/stats', async (req, res) => {
   try {
     const { operator, model, start, end } = req.query;
     
@@ -587,7 +587,7 @@ app.get('/stats', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 

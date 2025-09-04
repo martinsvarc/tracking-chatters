@@ -34,7 +34,8 @@ interface Filters {
   endDate: string;
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Use relative URLs for Vercel deployment, fallback to localhost for development
+const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
 
 const App: React.FC = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -79,7 +80,7 @@ const App: React.FC = () => {
         params.append('end', filters.endDate);
       }
 
-      const response = await fetch(`${API_BASE_URL}/threads?${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/api/threads?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -114,7 +115,7 @@ const App: React.FC = () => {
         params.append('end', filters.endDate);
       }
 
-      const response = await fetch(`${API_BASE_URL}/stats?${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/api/stats?${params.toString()}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
