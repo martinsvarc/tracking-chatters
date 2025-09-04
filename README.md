@@ -1,46 +1,252 @@
-# Getting Started with Create React App
+# Message Analyzer Platform
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A web-based platform to analyze and optimize text-based conversations for performance monitoring, focusing on chatter performance to maximize user investment, spending, and emotional connection.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **Real-time Analytics Dashboard**: View aggregated metrics including acknowledgment scores, affection scores, response times, and conversion rates
+- **Interactive Data Table**: Sortable table with expandable rows showing conversation details
+- **Advanced Filtering**: Filter by operator, model, and date range
+- **AI Query Assistant**: Ask questions about your filtered data with intelligent analysis
+- **Responsive Design**: Modern UI built with React and Tailwind CSS
+- **Database Integration**: Connected to NEON Postgres for real-time data storage
 
-### `npm start`
+## Architecture
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Frontend
+- **React.js** with TypeScript
+- **Tailwind CSS** for styling
+- **Components**:
+  - `Header.tsx`: Dashboard with total scores and refresh functionality
+  - `Table.tsx`: Sortable table with expandable conversation rows
+  - `FilterBar.tsx`: Floating filter bar with operator, model, and date filters
+  - `Modal.tsx`: AI query popup for data analysis
+  - `App.tsx`: Main container managing state and API integration
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### Backend
+- **Node.js** with Express.js
+- **NEON Postgres** database
+- **API Endpoints**:
+  - `GET /threads`: Fetch threads with optional filtering
+  - `POST /threads`: Add new conversation messages
+  - `GET /stats`: Get aggregated statistics
+  - `GET /health`: Health check endpoint
 
-### `npm test`
+### Database Schema
+```sql
+CREATE TABLE threads (
+  id SERIAL PRIMARY KEY,
+  message TEXT,
+  type VARCHAR(10),
+  operator VARCHAR(50),
+  date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  model VARCHAR(50)
+);
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+-- Indexes for performance
+CREATE INDEX idx_operator ON threads(operator);
+CREATE INDEX idx_model ON threads(model);
+CREATE INDEX idx_date ON threads(date);
+```
 
-### `npm run build`
+## Setup Instructions
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Prerequisites
+- Node.js (v14 or higher)
+- npm or yarn
+- NEON Postgres database account
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 1. Clone and Install Dependencies
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+# Install frontend dependencies
+npm install
 
-### `npm run eject`
+# Install backend dependencies
+cd server
+npm install
+cd ..
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### 2. Database Setup
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+1. Create a NEON Postgres database at [neon.tech](https://neon.tech)
+2. Copy your connection string
+3. Update `server/.env` with your database URL:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+```env
+DATABASE_URL=postgres://username:password@hostname:port/database
+PORT=5000
+```
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+### 3. Environment Configuration
 
-## Learn More
+The React app is configured to connect to the backend at `http://localhost:5000` by default. Update `.env` if needed:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```env
+REACT_APP_API_URL=http://localhost:5000
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 4. Start the Application
+
+#### Start the Backend Server
+```bash
+cd server
+npm start
+```
+
+The server will start on port 5000 and automatically create the database table and indexes.
+
+#### Start the Frontend (in a new terminal)
+```bash
+npm start
+```
+
+The React app will start on port 3000 and open in your browser.
+
+### 5. Add Sample Data
+
+Once both servers are running, you can add sample data by:
+1. Clicking the "Add Sample Data (Demo Mode)" button if you see a connection error
+2. Or use the API directly:
+
+```bash
+curl -X POST http://localhost:5000/threads \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Hello, how are you today?",
+    "type": "incoming",
+    "operator": "Sarah",
+    "model": "GPT-4"
+  }'
+```
+
+## Usage
+
+### Dashboard
+- View aggregated metrics in the header
+- Click "Refresh" to update data
+- Color-coded scores: Green (>80), Yellow (50-80), Red (<50)
+
+### Data Table
+- Click on any row to expand and view conversation messages
+- Sort columns by clicking headers
+- View up to 10 messages per thread with "Load More" option
+
+### Filtering
+- Use the floating filter bar at the bottom
+- Filter by multiple operators and models
+- Set date ranges for time-based analysis
+- Clear all filters with the "Clear Filters" button
+
+### AI Queries
+- Click "AI Query" button to open the analysis modal
+- Ask questions about your filtered data
+- Get insights and recommendations based on current filters
+
+## API Endpoints
+
+### GET /threads
+Fetch conversation threads with optional filtering.
+
+**Query Parameters:**
+- `operator`: Filter by operator name
+- `model`: Filter by AI model
+- `start`: Start date (YYYY-MM-DD)
+- `end`: End date (YYYY-MM-DD)
+
+**Example:**
+```
+GET /threads?operator=Sarah&model=GPT-4&start=2024-01-01&end=2024-01-31
+```
+
+### POST /threads
+Add a new conversation message.
+
+**Request Body:**
+```json
+{
+  "message": "Hello, how are you?",
+  "type": "incoming",
+  "operator": "Sarah",
+  "model": "GPT-4"
+}
+```
+
+### GET /stats
+Get aggregated statistics for the dashboard.
+
+**Response:**
+```json
+{
+  "avgAcknowledgment": 75,
+  "avgAffection": 68,
+  "avgResponseTime": 45,
+  "avgResponseRate": 82,
+  "avgPersonalization": 71,
+  "totalConverted": 12
+}
+```
+
+## Development
+
+### Project Structure
+```
+├── src/
+│   ├── App.tsx          # Main application component
+│   ├── Header.tsx       # Dashboard header with metrics
+│   ├── Table.tsx        # Data table with sorting and expansion
+│   ├── FilterBar.tsx    # Floating filter controls
+│   ├── Modal.tsx        # AI query modal
+│   └── globals.css      # Tailwind CSS configuration
+├── server/
+│   ├── index.js         # Express server
+│   ├── package.json     # Backend dependencies
+│   └── .env            # Database configuration
+├── public/              # Static assets
+└── package.json         # Frontend dependencies
+```
+
+### Adding New Features
+
+1. **Scoring Logic**: Update the backend to calculate real metrics from conversation data
+2. **AI Integration**: Replace mock AI responses with actual AI model integration
+3. **Real-time Updates**: Add WebSocket support for live data updates
+4. **Export Features**: Add CSV/PDF export functionality
+5. **User Authentication**: Implement user login and role-based access
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Error**
+   - Verify your NEON Postgres connection string in `server/.env`
+   - Ensure the database is accessible and credentials are correct
+
+2. **CORS Errors**
+   - Make sure the backend server is running on port 5000
+   - Check that `REACT_APP_API_URL` matches your backend URL
+
+3. **No Data Displayed**
+   - Add sample data using the demo mode button
+   - Check browser console for API errors
+   - Verify backend server is running and accessible
+
+4. **Styling Issues**
+   - Ensure Tailwind CSS is properly configured
+   - Check that `globals.css` is imported in your components
+
+### Development Tips
+
+- Use browser developer tools to inspect API calls
+- Check server logs for backend errors
+- Use the health endpoint (`GET /health`) to verify server status
+- Monitor database connections in NEON dashboard
+
+## License
+
+This project is for educational and development purposes.
+
+## Support
+
+For issues and questions, please check the troubleshooting section or review the code comments for implementation details.
