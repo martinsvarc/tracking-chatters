@@ -29,12 +29,10 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, filters, mode }) => {
 
     setIsLoading(true);
     
-    // Mock AI response - in real app, this would call the backend API
-    setTimeout(() => {
-      let mockResponse = '';
-      
-      if (mode === 'query') {
-        mockResponse = `Analyzing selected data based on your query: "${query}"
+    if (mode === 'query') {
+      // Mock AI response for query mode - in real app, this would call the backend API
+      setTimeout(() => {
+        const mockResponse = `Analyzing selected data based on your query: "${query}"
 
 Based on the current filters:
 - Operators: ${filters.operators.length > 0 ? filters.operators.join(', ') : 'All'}
@@ -53,8 +51,40 @@ Recommendations:
 3. Monitor GPT-4 performance for potential scaling
 
 This is a mock response. In the real implementation, this would analyze actual filtered data from your database.`;
-      } else {
-        mockResponse = `AI Analysis Results
+
+        setResponse(mockResponse);
+        setIsLoading(false);
+      }, 2000);
+    } else {
+      // Real API call for analysis mode
+      try {
+        const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
+        
+        const response = await fetch(`${API_BASE_URL}/api/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            filters: {
+              operators: filters.operators,
+              models: filters.models,
+              startDate: filters.startDate,
+              endDate: filters.endDate
+            },
+            numberOfChats: chatCount,
+            threadDepth: threadDepth
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.success) {
+          setResponse(`✅ AI Analysis Completed Successfully!
 
 Analysis Parameters:
 - Chat Count: ${chatCount} conversations
@@ -62,29 +92,38 @@ Analysis Parameters:
 - Applied Filters: ${filters.operators.length > 0 ? filters.operators.join(', ') : 'All operators'}, ${filters.models.length > 0 ? filters.models.join(', ') : 'All models'}
 - Timeframe: ${filters.startDate || 'No start date'} to ${filters.endDate || 'No end date'}
 
-Analysis Summary:
-• Analyzed ${chatCount} conversations with average depth of ${threadDepth} messages
-• Found ${Math.floor(chatCount * 0.75)} conversations with complete response patterns
-• Average conversation length: ${Math.floor(threadDepth * 0.8)} messages
-• Response rate: ${Math.floor(Math.random() * 20) + 80}%
-• Conversion rate: ${Math.floor(Math.random() * 15) + 15}%
+Results:
+• Successfully analyzed ${data.threadsAnalyzed} conversation threads
+• Data sent to webhook for AI processing
+• Webhook response status: ${data.webhookStatus}
 
-Key Insights:
-• Peak engagement occurs in the first ${Math.floor(threadDepth * 0.3)} messages
-• Response quality decreases after ${Math.floor(threadDepth * 0.7)} messages
-• Optimal conversation length for conversion: ${Math.floor(threadDepth * 0.6)}-${Math.floor(threadDepth * 0.8)} messages
+The analysis data has been sent to the AI processing webhook. The system will analyze:
+- Message patterns and conversation flow
+- Response quality and timing
+- Personalization and acknowledgment metrics
+- Conversion indicators and engagement patterns
 
-Recommendations:
-1. Focus on improving early conversation engagement
-2. Implement conversation length optimization
-3. Monitor response quality degradation patterns
+You can expect to receive detailed insights and recommendations once the AI analysis is complete. The results will be available for review in the dashboard.`);
+        } else {
+          setResponse(`❌ Analysis Failed
 
-This is a mock analysis. In the real implementation, this would perform deep analysis on actual conversation data.`;
+Error: ${data.error}
+Details: ${data.details || 'No additional details available'}
+
+Please check your connection and try again. If the problem persists, contact support.`);
+        }
+      } catch (error) {
+        console.error('Error running analysis:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        setResponse(`❌ Analysis Failed
+
+Error: ${errorMessage}
+
+Please check your connection and try again. If the problem persists, contact support.`);
+      } finally {
+        setIsLoading(false);
       }
-
-      setResponse(mockResponse);
-      setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleClose = () => {
