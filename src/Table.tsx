@@ -15,15 +15,23 @@ interface Thread {
   personalization_score: number | null;
 }
 
+interface Filters {
+  operators: string[];
+  models: string[];
+  startDate: string;
+  endDate: string;
+}
+
 interface TableProps {
   threads: Thread[];
   isLoading: boolean;
+  filters?: Filters;
 }
 
 type SortField = 'thread_id' | 'operator' | 'last_message' | 'converted';
 type SortDirection = 'asc' | 'desc';
 
-const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
+const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
   const [sortField, setSortField] = useState<SortField>('last_message');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -225,8 +233,13 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
       
       {sortedThreads.length === 0 && !isLoading && (
         <div className="text-center py-12">
-          <div className="text-gray-300 text-lg">No threads yet</div>
-          <div className="text-gray-400 text-sm mt-2">Add some data via the AI Analysis feature or API</div>
+          <div className="text-gray-300 text-lg">No conversation threads found</div>
+          <div className="text-gray-400 text-sm mt-2">
+            {filters && (filters.operators.length > 0 || filters.models.length > 0 || filters.startDate || filters.endDate)
+              ? 'Try adjusting your filters or clear them to see all data'
+              : 'Add conversation data using the API or test with sample data'
+            }
+          </div>
         </div>
       )}
     </div>

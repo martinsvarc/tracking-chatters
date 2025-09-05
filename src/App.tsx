@@ -193,7 +193,7 @@ const App: React.FC = () => {
 
         {/* Table Component */}
         <div className="mb-20">
-          <Table threads={threads} isLoading={isLoading} />
+          <Table threads={threads} isLoading={isLoading} filters={filters} />
         </div>
 
         {/* Filter Bar Component */}

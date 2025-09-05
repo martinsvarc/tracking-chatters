@@ -14,34 +14,73 @@ app.use(express.json());
 let pool;
 let dbConnected = false;
 
+// Log environment configuration
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+
 try {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
       rejectUnauthorized: false
-    }
+    },
+    // Add connection timeout and retry logic
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 20
   });
 
   // Test database connection
   pool.on('connect', () => {
-    console.log('Connected to NEON Postgres database');
+    console.log('✅ Connected to NEON Postgres database');
     dbConnected = true;
   });
 
   pool.on('error', (err) => {
-    console.error('Database connection error:', err);
+    console.error('❌ Database connection error:', err);
     dbConnected = false;
   });
+  
+  // Test initial connection
+  pool.query('SELECT NOW() as current_time')
+    .then(result => {
+      console.log('✅ Database query test successful:', result.rows[0]);
+      dbConnected = true;
+    })
+    .catch(err => {
+      console.error('❌ Database query test failed:', err);
+      dbConnected = false;
+    });
+    
 } catch (error) {
-  console.error('Failed to initialize database pool:', error);
+  console.error('❌ Failed to initialize database pool:', error);
   dbConnected = false;
 }
 
 // Initialize database tables and indexes
 async function initializeDatabase() {
-  if (!dbConnected || !pool) {
-    console.log('Database not connected - running in demo mode with mock data');
+  console.log('🔧 Initializing database...');
+  console.log('Database connected:', dbConnected);
+  console.log('Pool exists:', !!pool);
+  
+  if (!pool) {
+    console.error('❌ Database pool not initialized - cannot proceed');
     return;
+  }
+  
+  // Force connection test
+  try {
+    await pool.query('SELECT 1');
+    console.log('✅ Database connection verified');
+    dbConnected = true;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error);
+    dbConnected = false;
+    // Don't return - continue with table creation attempts
   }
   
   try {
@@ -94,9 +133,10 @@ async function initializeDatabase() {
     // Migrate existing data if threads table has old structure
     await migrateExistingData();
 
-    console.log('Database tables and indexes created successfully');
+    console.log('✅ Database tables and indexes created successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    console.error('❌ Error initializing database:', error);
+    // Continue execution even if table creation fails
   }
 }
 
@@ -171,98 +211,22 @@ async function migrateExistingData() {
 
 // API Routes - All routes are prefixed with /api for Vercel deployment
 
-// Mock data for demo mode
-const mockThreads = [
-  {
-    id: 1,
-    message: "Hello, how are you today?",
-    type: 'incoming',
-    operator: 'Sarah',
-    date: '2024-01-15T10:30:00Z',
-    model: 'GPT-4'
-  },
-  {
-    id: 2,
-    message: "I'm doing great, thanks for asking!",
-    type: 'outgoing',
-    operator: 'Sarah',
-    date: '2024-01-15T10:31:00Z',
-    model: 'GPT-4'
-  },
-  {
-    id: 3,
-    message: "What can I help you with today?",
-    type: 'incoming',
-    operator: 'Emma',
-    date: '2024-01-15T11:15:00Z',
-    model: 'GPT-3.5'
-  },
-  {
-    id: 4,
-    message: "I'd like to know more about your premium features",
-    type: 'outgoing',
-    operator: 'Emma',
-    date: '2024-01-15T11:16:00Z',
-    model: 'GPT-3.5'
-  },
-  {
-    id: 5,
-    message: "Of course! Let me tell you about our premium services",
-    type: 'incoming',
-    operator: 'Jessica',
-    date: '2024-01-15T14:20:00Z',
-    model: 'Claude'
-  },
-  {
-    id: 6,
-    message: "That sounds interesting, can you tell me more?",
-    type: 'outgoing',
-    operator: 'Jessica',
-    date: '2024-01-15T14:21:00Z',
-    model: 'Claude'
-  }
-];
+// Mock data removed - using real database only
 
 // GET /api/threads - Fetch all threads with calculated fields and optional filtering
 app.get('/api/threads', async (req, res) => {
+  console.log('📥 GET /api/threads called');
+  console.log('Database connected:', dbConnected);
+  console.log('Pool exists:', !!pool);
+  
   try {
-    // If database is not connected, return mock data
-    if (!dbConnected || !pool) {
-      const { operator, model, start, end } = req.query;
-      
-      let filteredThreads = [...mockThreads];
-      
-      // Apply filters to mock data
-      if (operator) {
-        const operators = operator.split(',');
-        filteredThreads = filteredThreads.filter(thread => 
-          operators.includes(thread.operator)
-        );
-      }
-      
-      if (model) {
-        const models = model.split(',');
-        filteredThreads = filteredThreads.filter(thread => 
-          models.includes(thread.model)
-        );
-      }
-      
-      if (start) {
-        filteredThreads = filteredThreads.filter(thread => 
-          new Date(thread.date) >= new Date(start)
-        );
-      }
-      
-      if (end) {
-        filteredThreads = filteredThreads.filter(thread => 
-          new Date(thread.date) <= new Date(end)
-        );
-      }
-      
-      return res.json(filteredThreads);
+    if (!pool) {
+      console.error('❌ Database pool not available');
+      return res.status(500).json({ error: 'Database not available' });
     }
     
     const { operator, model, start, end } = req.query;
+    console.log('Query params:', { operator, model, start, end });
     
     // Query to fetch threads with calculated fields
     let query = `
@@ -317,7 +281,11 @@ app.get('/api/threads', async (req, res) => {
       ORDER BY t.last_message DESC
     `;
 
+    console.log('Executing query:', query);
+    console.log('Query params:', params);
+    
     const result = await pool.query(query, params);
+    console.log(`✅ Query executed successfully, returned ${result.rows.length} rows`);
     
     // Format the response with calculated fields
     const formattedThreads = result.rows.map(row => ({
@@ -335,10 +303,14 @@ app.get('/api/threads', async (req, res) => {
       personalization_score: row.personalization_score
     }));
     
+    console.log('📤 Returning formatted threads:', formattedThreads.length);
     res.json(formattedThreads);
   } catch (error) {
-    console.error('Error fetching threads:', error);
-    res.status(500).json({ error: 'Failed to fetch threads' });
+    console.error('❌ Error fetching threads:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch threads',
+      details: error.message 
+    });
   }
 });
 
@@ -364,34 +336,30 @@ function formatRelativeTime(secondsAgo) {
 
 // POST /api/threads - Add new message with upsert logic and automated calculations
 app.post('/api/threads', async (req, res) => {
+  console.log('📥 POST /api/threads called');
+  console.log('Request body:', req.body);
+  console.log('Database connected:', dbConnected);
+  console.log('Pool exists:', !!pool);
+  
   try {
     const { operator, thread_id, model, type, message, converted } = req.body;
     
     if (!operator || !thread_id || !model || !type || !message) {
+      console.error('❌ Missing required fields');
       return res.status(400).json({ 
         error: 'Missing required fields: operator, thread_id, model, type, message' 
       });
     }
 
-    // If database is not connected, simulate adding to mock data
-    if (!dbConnected || !pool) {
-      const newMessage = {
-        id: mockThreads.length + 1,
-        thread_id,
-        message,
-        type,
-        operator,
-        model,
-        date: new Date().toISOString(),
-        converted: converted || null
-      };
-      mockThreads.push(newMessage);
-      return res.status(201).json(newMessage);
+    if (!pool) {
+      console.error('❌ Database pool not available');
+      return res.status(500).json({ error: 'Database not available' });
     }
 
     // Start transaction for atomic operations
     const client = await pool.connect();
     try {
+      console.log('🔄 Starting database transaction');
       await client.query('BEGIN');
 
       // Upsert thread record
@@ -405,6 +373,7 @@ app.post('/api/threads', async (req, res) => {
             ELSE threads.converted 
           END
       `;
+      console.log('📝 Upserting thread record');
       await client.query(threadUpsertQuery, [thread_id, operator, model, converted || null]);
 
       // Insert message
@@ -413,27 +382,37 @@ app.post('/api/threads', async (req, res) => {
         VALUES ($1, $2, $3, $4, $5)
         RETURNING *
       `;
+      console.log('📝 Inserting message');
       const messageResult = await client.query(messageInsertQuery, [thread_id, operator, model, type, message]);
 
       // Update automated calculations
+      console.log('🧮 Updating thread calculations');
       await updateThreadCalculations(client, thread_id);
 
       await client.query('COMMIT');
+      console.log('✅ Transaction committed successfully');
       
-      res.status(201).json({
+      const response = {
         ...messageResult.rows[0],
         thread_id,
         converted: converted || null
-      });
+      };
+      
+      console.log('📤 Returning response:', response);
+      res.status(201).json(response);
     } catch (error) {
+      console.error('❌ Transaction error, rolling back:', error);
       await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
     }
   } catch (error) {
-    console.error('Error creating thread:', error);
-    res.status(500).json({ error: 'Failed to create thread' });
+    console.error('❌ Error creating thread:', error);
+    res.status(500).json({ 
+      error: 'Failed to create thread',
+      details: error.message 
+    });
   }
 });
 
@@ -475,8 +454,10 @@ function calculateAIScores(message) {
 
 // Helper function to update automated calculations for a thread
 async function updateThreadCalculations(client, threadId) {
+  console.log(`🧮 Updating calculations for thread: ${threadId}`);
   try {
     // Update last_message timestamp
+    console.log('📅 Updating last_message timestamp');
     await client.query(`
       UPDATE threads 
       SET last_message = (
@@ -488,6 +469,7 @@ async function updateThreadCalculations(client, threadId) {
     `, [threadId]);
 
     // Calculate average response time
+    console.log('⏱️ Calculating average response time');
     const avgResponseTimeQuery = `
       WITH response_times AS (
         SELECT 
@@ -514,8 +496,10 @@ async function updateThreadCalculations(client, threadId) {
     
     const avgResult = await client.query(avgResponseTimeQuery, [threadId]);
     const avgResponseTime = avgResult.rows[0]?.avg_time || null;
+    console.log('⏱️ Average response time:', avgResponseTime);
 
     // Calculate responded status
+    console.log('✅ Calculating responded status');
     const respondedQuery = `
       WITH last_message_info AS (
         SELECT type, date
@@ -534,8 +518,10 @@ async function updateThreadCalculations(client, threadId) {
     
     const respondedResult = await client.query(respondedQuery, [threadId]);
     const responded = respondedResult.rows[0]?.responded || 'Yes';
+    console.log('✅ Responded status:', responded);
 
     // Calculate AI scores for all outgoing messages in this thread
+    console.log('🤖 Calculating AI scores');
     const messagesQuery = `
       SELECT message 
       FROM messages 
@@ -560,37 +546,43 @@ async function updateThreadCalculations(client, threadId) {
     const avgAcknowledgment = messageCount > 0 ? Math.round(totalAcknowledgment / messageCount) : null;
     const avgAffection = messageCount > 0 ? Math.round(totalAffection / messageCount) : null;
     const avgPersonalization = messageCount > 0 ? Math.round(totalPersonalization / messageCount) : null;
+    
+    console.log('🤖 AI Scores calculated:', {
+      avgAcknowledgment,
+      avgAffection,
+      avgPersonalization,
+      messageCount
+    });
 
     // Update threads table with calculated values
+    console.log('💾 Updating threads table with calculated values');
     await client.query(`
       UPDATE threads 
       SET avg_response_time = $2, responded = $3, acknowledgment_score = $4, affection_score = $5, personalization_score = $6
       WHERE thread_id = $1
     `, [threadId, avgResponseTime, responded, avgAcknowledgment, avgAffection, avgPersonalization]);
+    
+    console.log('✅ Thread calculations updated successfully');
 
   } catch (error) {
-    console.error('Error updating thread calculations:', error);
+    console.error('❌ Error updating thread calculations:', error);
     throw error;
   }
 }
 
 // GET /api/stats - Get aggregated statistics for header
 app.get('/api/stats', async (req, res) => {
+  console.log('📥 GET /api/stats called');
+  console.log('Database connected:', dbConnected);
+  console.log('Pool exists:', !!pool);
+  
   try {
     const { operator, model, start, end } = req.query;
+    console.log('Query params:', { operator, model, start, end });
     
-    // If database is not connected, return placeholder stats
-    if (!dbConnected || !pool) {
-      const stats = {
-        avgAcknowledgment: 75,
-        avgAffection: 68,
-        avgResponseTime: 45,
-        avgResponseRate: 82,
-        avgPersonalization: 71,
-        totalConverted: 12,
-        totalChats: 156
-      };
-      return res.json(stats);
+    if (!pool) {
+      console.error('❌ Database pool not available');
+      return res.status(500).json({ error: 'Database not available' });
     }
     
     // Build query with filters
@@ -634,8 +626,13 @@ app.get('/api/stats', async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
+    console.log('Executing stats query:', query);
+    console.log('Query params:', params);
+    
     const result = await pool.query(query, params);
     const row = result.rows[0];
+    
+    console.log('Raw stats result:', row);
     
     const totalChats = parseInt(row.total_chats) || 0;
     const totalConverted = parseInt(row.total_converted) || 0;
@@ -656,10 +653,14 @@ app.get('/api/stats', async (req, res) => {
       conversionRate: totalChats > 0 ? Math.round((totalConverted / totalChats) * 100) : 0
     };
     
+    console.log('📤 Returning calculated stats:', stats);
     res.json(stats);
   } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    console.error('❌ Error fetching stats:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch stats',
+      details: error.message 
+    });
   }
 });
 
@@ -670,7 +671,9 @@ app.get('/api/health', (req, res) => {
 
 // Start server
 app.listen(port, async () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Database URL: ${process.env.DATABASE_URL ? 'CONFIGURED' : 'NOT SET'}`);
   await initializeDatabase();
 });
 
