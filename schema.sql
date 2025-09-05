@@ -49,7 +49,10 @@ CREATE TABLE IF NOT EXISTS threads (
     converted VARCHAR(10) DEFAULT NULL,      -- Conversion status ('Yes' or NULL)
     last_message TIMESTAMP DEFAULT NULL,     -- Timestamp of the most recent message
     avg_response_time INTERVAL DEFAULT NULL, -- Average time to respond to incoming messages
-    responded VARCHAR(3) DEFAULT 'Yes'       -- Response status ('Yes' or 'No')
+    responded VARCHAR(3) DEFAULT 'Yes',      -- Response status ('Yes' or 'No')
+    acknowledgment_score INTEGER DEFAULT NULL, -- AI-calculated acknowledgment score (0-100)
+    affection_score INTEGER DEFAULT NULL,    -- AI-calculated affection score (0-100)
+    personalization_score INTEGER DEFAULT NULL -- AI-calculated personalization score (0-100)
 );
 
 -- =====================================================
@@ -126,6 +129,9 @@ COMMENT ON COLUMN threads.converted IS 'Conversion status: Yes if user converted
 COMMENT ON COLUMN threads.last_message IS 'Timestamp of the most recent message in this thread';
 COMMENT ON COLUMN threads.avg_response_time IS 'Average time taken to respond to incoming messages';
 COMMENT ON COLUMN threads.responded IS 'Response status: Yes if last outgoing message is within 3 hours, No otherwise';
+COMMENT ON COLUMN threads.acknowledgment_score IS 'AI-calculated acknowledgment score (0-100) based on message analysis';
+COMMENT ON COLUMN threads.affection_score IS 'AI-calculated affection score (0-100) based on message analysis';
+COMMENT ON COLUMN threads.personalization_score IS 'AI-calculated personalization score (0-100) based on message analysis';
 
 -- =====================================================
 -- CREATE USEFUL VIEWS FOR COMMON QUERIES

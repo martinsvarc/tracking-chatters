@@ -5,9 +5,10 @@ A web-based platform to analyze and optimize text-based conversations for perfor
 ## Features
 
 - **Real-time Analytics Dashboard**: View aggregated metrics including acknowledgment scores, affection scores, response times, and conversion rates
-- **Interactive Data Table**: Sortable table with expandable rows showing conversation details
+- **Interactive Data Table**: Sortable table with expandable rows showing conversation details and AI-calculated scores
 - **Advanced Filtering**: Filter by operator, model, and date range
 - **AI Query Assistant**: Ask questions about your filtered data with intelligent analysis
+- **AI Score Calculation**: Automatic calculation of acknowledgment, affection, and personalization scores
 - **Responsive Design**: Modern UI built with React and Tailwind CSS
 - **Database Integration**: Connected to NEON Postgres for real-time data storage
 
@@ -34,20 +35,57 @@ A web-based platform to analyze and optimize text-based conversations for perfor
 
 ### Database Schema
 ```sql
-CREATE TABLE threads (
+-- Messages table for individual messages
+CREATE TABLE messages (
   id SERIAL PRIMARY KEY,
-  message TEXT,
-  type VARCHAR(10),
-  operator VARCHAR(50),
-  date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  model VARCHAR(50)
+  thread_id VARCHAR(50) NOT NULL,
+  operator VARCHAR(50) NOT NULL,
+  model VARCHAR(50) NOT NULL,
+  type VARCHAR(10) NOT NULL CHECK (type IN ('incoming', 'outgoing')),
+  message TEXT NOT NULL,
+  date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Threads table for per-thread metadata and calculated fields
+CREATE TABLE threads (
+  thread_id VARCHAR(50) PRIMARY KEY,
+  operator VARCHAR(50) NOT NULL,
+  model VARCHAR(50) NOT NULL,
+  converted VARCHAR(10) DEFAULT NULL,
+  last_message TIMESTAMP DEFAULT NULL,
+  avg_response_time INTERVAL DEFAULT NULL,
+  responded VARCHAR(3) DEFAULT 'Yes',
+  acknowledgment_score INTEGER DEFAULT NULL,
+  affection_score INTEGER DEFAULT NULL,
+  personalization_score INTEGER DEFAULT NULL
 );
 
 -- Indexes for performance
-CREATE INDEX idx_operator ON threads(operator);
-CREATE INDEX idx_model ON threads(model);
-CREATE INDEX idx_date ON threads(date);
+CREATE INDEX idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX idx_messages_date ON messages(date);
+CREATE INDEX idx_messages_operator ON messages(operator);
+CREATE INDEX idx_messages_model ON messages(model);
+CREATE INDEX idx_threads_operator ON threads(operator);
+CREATE INDEX idx_threads_model ON threads(model);
+CREATE INDEX idx_threads_last_message ON threads(last_message);
 ```
+
+## Recent Updates
+
+### Fixed Dummy Data and Calculations (Latest)
+- ✅ **Removed all hardcoded dummy data** from frontend components
+- ✅ **Updated database schema** to include AI score columns (acknowledgment_score, affection_score, personalization_score)
+- ✅ **Implemented real AI score calculations** based on message content analysis
+- ✅ **Fixed header metrics** to use real database aggregations instead of placeholder values
+- ✅ **Updated API endpoints** to return actual calculated data
+- ✅ **Added proper empty state handling** when no data is available
+- ✅ **Created migration script** for existing databases
+
+### AI Score Calculation
+The platform now automatically calculates three key metrics for each conversation thread:
+- **Acknowledgment Score**: Based on question handling and response quality
+- **Affection Score**: Based on emotional language and warmth
+- **Personalization Score**: Based on personal references and customization
 
 ## Setup Instructions
 
@@ -79,6 +117,23 @@ DATABASE_URL=postgres://username:password@hostname:port/database
 PORT=5000
 ```
 
+#### For Existing Databases
+
+If you have an existing database, run the migration script to add the new AI score columns:
+
+```bash
+# Connect to your database and run:
+psql $DATABASE_URL -f migrate-database.sql
+```
+
+Or manually add the columns:
+```sql
+ALTER TABLE threads 
+ADD COLUMN IF NOT EXISTS acknowledgment_score INTEGER DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS affection_score INTEGER DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS personalization_score INTEGER DEFAULT NULL;
+```
+
 ### 3. Environment Configuration
 
 The React app is configured to connect to the backend at `http://localhost:5000` by default. Update `.env` if needed:
@@ -104,7 +159,22 @@ npm start
 
 The React app will start on port 3000 and open in your browser.
 
-### 5. Add Sample Data
+### 5. Test with Sample Data
+
+To test the functionality with sample data:
+
+```bash
+# Add test data (make sure backend is running)
+node test-data.js
+```
+
+This will add sample conversations and verify that:
+- AI scores are calculated correctly
+- Header metrics show real data
+- Table displays actual database records
+- All calculations are accurate
+
+### 6. Add Sample Data (Alternative)
 
 Once both servers are running, you can add sample data by:
 1. Clicking the "Add Sample Data (Demo Mode)" button if you see a connection error

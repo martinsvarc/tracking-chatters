@@ -14,6 +14,9 @@ interface Thread {
   avg_response_time: number | null;
   responded: string;
   message_count: number;
+  acknowledgment_score: number | null;
+  affection_score: number | null;
+  personalization_score: number | null;
 }
 
 interface Stats {
@@ -40,14 +43,14 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 
 const App: React.FC = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [stats, setStats] = useState<Stats>({
-    avgAcknowledgment: 75,
-    avgAffection: 68,
-    avgResponseTime: 45,
-    avgPersonalization: 71,
-    conversionRate: 24,
-    responseRate: 85,
-    totalChats: 156,
-    totalConverted: 12
+    avgAcknowledgment: 0,
+    avgAffection: 0,
+    avgResponseTime: 0,
+    avgPersonalization: 0,
+    conversionRate: 0,
+    responseRate: 0,
+    totalChats: 0,
+    totalConverted: 0
   });
   const [filters, setFilters] = useState<Filters>({
     operators: [],

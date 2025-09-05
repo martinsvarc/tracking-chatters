@@ -67,7 +67,10 @@ async function initializeDatabase() {
         converted VARCHAR(10),
         last_message TIMESTAMP,
         avg_response_time INTERVAL,
-        responded VARCHAR(3)
+        responded VARCHAR(3),
+        acknowledgment_score INTEGER DEFAULT NULL,
+        affection_score INTEGER DEFAULT NULL,
+        personalization_score INTEGER DEFAULT NULL
       )
     `);
 
@@ -271,6 +274,9 @@ app.get('/api/threads', async (req, res) => {
         t.last_message,
         t.avg_response_time,
         t.responded,
+        t.acknowledgment_score,
+        t.affection_score,
+        t.personalization_score,
         EXTRACT(EPOCH FROM (NOW() - t.last_message)) as last_message_seconds_ago,
         EXTRACT(EPOCH FROM t.avg_response_time) as avg_response_seconds,
         COUNT(m.id) as message_count
@@ -307,7 +313,7 @@ app.get('/api/threads', async (req, res) => {
     }
 
     query += `
-      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.responded
+      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.responded, t.acknowledgment_score, t.affection_score, t.personalization_score
       ORDER BY t.last_message DESC
     `;
 
@@ -323,7 +329,10 @@ app.get('/api/threads', async (req, res) => {
       last_message_relative: formatRelativeTime(row.last_message_seconds_ago),
       avg_response_time: row.avg_response_seconds ? Math.round(row.avg_response_seconds) : null,
       responded: row.responded,
-      message_count: parseInt(row.message_count)
+      message_count: parseInt(row.message_count),
+      acknowledgment_score: row.acknowledgment_score,
+      affection_score: row.affection_score,
+      personalization_score: row.personalization_score
     }));
     
     res.json(formattedThreads);
@@ -428,6 +437,42 @@ app.post('/api/threads', async (req, res) => {
   }
 });
 
+// Helper function to calculate AI scores for a message
+function calculateAIScores(message) {
+  // Placeholder function - in production, this would use real NLP analysis
+  // For now, we'll generate scores based on message characteristics
+  
+  const messageLength = message.length;
+  const hasQuestion = message.includes('?');
+  const hasExclamation = message.includes('!');
+  const hasPersonalWords = /\b(I|you|your|we|our|us)\b/i.test(message);
+  const hasEmotionalWords = /\b(thank|please|sorry|happy|excited|love|great|amazing|wonderful)\b/i.test(message);
+  
+  // Acknowledgment score: based on question handling and response quality
+  let acknowledgment = 50;
+  if (hasQuestion) acknowledgment += 20;
+  if (messageLength > 50) acknowledgment += 15;
+  if (hasPersonalWords) acknowledgment += 15;
+  
+  // Affection score: based on emotional language and warmth
+  let affection = 50;
+  if (hasEmotionalWords) affection += 25;
+  if (hasPersonalWords) affection += 15;
+  if (hasExclamation) affection += 10;
+  
+  // Personalization score: based on personal references and customization
+  let personalization = 50;
+  if (hasPersonalWords) personalization += 20;
+  if (messageLength > 100) personalization += 15;
+  if (hasEmotionalWords) personalization += 15;
+  
+  return {
+    acknowledgment: Math.min(100, Math.max(0, acknowledgment)),
+    affection: Math.min(100, Math.max(0, affection)),
+    personalization: Math.min(100, Math.max(0, personalization))
+  };
+}
+
 // Helper function to update automated calculations for a thread
 async function updateThreadCalculations(client, threadId) {
   try {
@@ -490,12 +535,38 @@ async function updateThreadCalculations(client, threadId) {
     const respondedResult = await client.query(respondedQuery, [threadId]);
     const responded = respondedResult.rows[0]?.responded || 'Yes';
 
+    // Calculate AI scores for all outgoing messages in this thread
+    const messagesQuery = `
+      SELECT message 
+      FROM messages 
+      WHERE thread_id = $1 AND type = 'outgoing'
+      ORDER BY date
+    `;
+    const messagesResult = await client.query(messagesQuery, [threadId]);
+    
+    let totalAcknowledgment = 0;
+    let totalAffection = 0;
+    let totalPersonalization = 0;
+    let messageCount = 0;
+    
+    for (const row of messagesResult.rows) {
+      const scores = calculateAIScores(row.message);
+      totalAcknowledgment += scores.acknowledgment;
+      totalAffection += scores.affection;
+      totalPersonalization += scores.personalization;
+      messageCount++;
+    }
+    
+    const avgAcknowledgment = messageCount > 0 ? Math.round(totalAcknowledgment / messageCount) : null;
+    const avgAffection = messageCount > 0 ? Math.round(totalAffection / messageCount) : null;
+    const avgPersonalization = messageCount > 0 ? Math.round(totalPersonalization / messageCount) : null;
+
     // Update threads table with calculated values
     await client.query(`
       UPDATE threads 
-      SET avg_response_time = $2, responded = $3
+      SET avg_response_time = $2, responded = $3, acknowledgment_score = $4, affection_score = $5, personalization_score = $6
       WHERE thread_id = $1
-    `, [threadId, avgResponseTime, responded]);
+    `, [threadId, avgResponseTime, responded, avgAcknowledgment, avgAffection, avgPersonalization]);
 
   } catch (error) {
     console.error('Error updating thread calculations:', error);
@@ -528,7 +599,10 @@ app.get('/api/stats', async (req, res) => {
         COUNT(*) as total_chats,
         COUNT(CASE WHEN converted = 'Yes' THEN 1 END) as total_converted,
         AVG(EXTRACT(EPOCH FROM avg_response_time)) as avg_response_time_seconds,
-        COUNT(CASE WHEN responded = 'Yes' THEN 1 END) as responded_count
+        COUNT(CASE WHEN responded = 'Yes' THEN 1 END) as responded_count,
+        AVG(acknowledgment_score) as avg_acknowledgment,
+        AVG(affection_score) as avg_affection,
+        AVG(personalization_score) as avg_personalization
       FROM threads t
     `;
     
@@ -567,13 +641,16 @@ app.get('/api/stats', async (req, res) => {
     const totalConverted = parseInt(row.total_converted) || 0;
     const avgResponseTime = row.avg_response_time_seconds ? Math.round(row.avg_response_time_seconds) : 0;
     const respondedCount = parseInt(row.responded_count) || 0;
+    const avgAcknowledgment = row.avg_acknowledgment ? Math.round(row.avg_acknowledgment) : 0;
+    const avgAffection = row.avg_affection ? Math.round(row.avg_affection) : 0;
+    const avgPersonalization = row.avg_personalization ? Math.round(row.avg_personalization) : 0;
     
     const stats = {
-      avgAcknowledgment: 75, // Placeholder - will be calculated by AI analysis
-      avgAffection: 68, // Placeholder - will be calculated by AI analysis
+      avgAcknowledgment: avgAcknowledgment,
+      avgAffection: avgAffection,
       avgResponseTime: avgResponseTime,
-      avgResponseRate: totalChats > 0 ? Math.round((respondedCount / totalChats) * 100) : 0,
-      avgPersonalization: 71, // Placeholder - will be calculated by AI analysis
+      responseRate: totalChats > 0 ? Math.round((respondedCount / totalChats) * 100) : 0,
+      avgPersonalization: avgPersonalization,
       totalConverted: totalConverted,
       totalChats: totalChats,
       conversionRate: totalChats > 0 ? Math.round((totalConverted / totalChats) * 100) : 0

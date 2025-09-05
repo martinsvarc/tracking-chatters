@@ -17,6 +17,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ stats, onRefresh, isLoading }) => {
   const formatScore = (score: number) => {
+    if (score === 0) return 'text-gray-400';
     if (score >= 80) return 'text-green-400';
     if (score >= 50) return 'text-yellow-400';
     return 'text-red-400';

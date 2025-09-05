@@ -10,6 +10,9 @@ interface Thread {
   avg_response_time: number | null;
   responded: string;
   message_count: number;
+  acknowledgment_score: number | null;
+  affection_score: number | null;
+  personalization_score: number | null;
 }
 
 interface TableProps {
@@ -25,49 +28,8 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  // Use real data from API or fallback to mock data
-  const displayThreads = threads.length > 0 ? threads : [
-    {
-      thread_id: 'thread_001',
-      operator: 'Sarah',
-      model: 'Isabella',
-      converted: 'Yes',
-      last_message: '2024-01-15T10:35:00Z',
-      last_message_relative: '3 min ago',
-      avg_response_time: 45,
-      responded: 'Yes',
-      message_count: 5
-    },
-    {
-      thread_id: 'thread_002',
-      operator: 'Emma',
-      model: 'Sophia',
-      converted: null,
-      last_message: '2024-01-15T11:05:00Z',
-      last_message_relative: '1 hour ago',
-      avg_response_time: 120,
-      responded: 'Yes',
-      message_count: 3
-    },
-    {
-      thread_id: 'thread_003',
-      operator: 'Jessica',
-      model: 'Claude',
-      converted: 'Yes',
-      last_message: '2024-01-15T14:21:00Z',
-      last_message_relative: '2 hours ago',
-      avg_response_time: 30,
-      responded: 'No',
-      message_count: 8
-    }
-  ];
-
-  // Mock scoring data - in real app, this would be calculated
-  const getMockScores = (threadId: string) => ({
-    acknowledgment: Math.floor(Math.random() * 40) + 60, // 60-100
-    affection: Math.floor(Math.random() * 40) + 60,
-    personalization: Math.floor(Math.random() * 40) + 60
-  });
+  // Use real data from API
+  const displayThreads = threads;
 
 
   const formatScore = (score: number) => {
@@ -173,7 +135,6 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
           </thead>
           <tbody className="bg-transparent divide-y divide-gray-600">
             {sortedThreads.map((thread) => {
-              const scores = getMockScores(thread.thread_id);
               const isExpanded = expandedRows.has(thread.thread_id);
               
               return (
@@ -192,13 +153,13 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
                       {thread.last_message_relative}
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(scores.acknowledgment)}`}>
-                        {scores.acknowledgment}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.acknowledgment_score || 0)}`}>
+                        {thread.acknowledgment_score || 'N/A'}
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(scores.affection)}`}>
-                        {scores.affection}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.affection_score || 0)}`}>
+                        {thread.affection_score || 'N/A'}
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
@@ -209,8 +170,8 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(scores.personalization)}`}>
-                        {scores.personalization}
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.personalization_score || 0)}`}>
+                        {thread.personalization_score || 'N/A'}
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
@@ -262,10 +223,10 @@ const Table: React.FC<TableProps> = ({ threads, isLoading }) => {
         </table>
       </div>
       
-      {sortedThreads.length === 0 && (
+      {sortedThreads.length === 0 && !isLoading && (
         <div className="text-center py-12">
-          <div className="text-gray-300 text-lg">No threads found</div>
-          <div className="text-gray-400 text-sm mt-2">Try adjusting your filters or add some data</div>
+          <div className="text-gray-300 text-lg">No threads yet</div>
+          <div className="text-gray-400 text-sm mt-2">Add some data via the AI Analysis feature or API</div>
         </div>
       )}
     </div>
