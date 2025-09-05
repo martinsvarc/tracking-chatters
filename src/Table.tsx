@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
 
+interface Message {
+  id: number;
+  type: string;
+  message: string;
+  date: string;
+}
+
 interface Thread {
   thread_id: string;
   operator: string;
@@ -13,6 +20,7 @@ interface Thread {
   acknowledgment_score: number | null;
   affection_score: number | null;
   personalization_score: number | null;
+  messages: Message[];
 }
 
 interface Filters {
@@ -35,6 +43,7 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
   const [sortField, setSortField] = useState<SortField>('last_message');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [messagesToShow, setMessagesToShow] = useState<{ [threadId: string]: number }>({});
 
   // Use real data from API
   const displayThreads = threads;
@@ -62,8 +71,23 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
       newExpanded.delete(threadId);
     } else {
       newExpanded.add(threadId);
+      // Initialize messages to show for this thread
+      if (!messagesToShow[threadId]) {
+        setMessagesToShow(prev => ({ ...prev, [threadId]: 10 }));
+      }
     }
     setExpandedRows(newExpanded);
+  };
+
+  const loadMoreMessages = (threadId: string) => {
+    setMessagesToShow(prev => ({
+      ...prev,
+      [threadId]: (prev[threadId] || 10) + 10
+    }));
+  };
+
+  const formatMessageDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
   };
 
   const sortedThreads = [...displayThreads].sort((a, b) => {
@@ -195,7 +219,7 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
                   {isExpanded && (
                     <tr>
                       <td colSpan={8} className="px-3 py-4 bg-gray-800/30">
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                           <h4 className="font-medium text-gray-100 mb-2">Thread Details</h4>
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
@@ -217,9 +241,58 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
                               <span className="text-gray-100 ml-2">{new Date(thread.last_message).toLocaleString()}</span>
                             </div>
                           </div>
-                          <button className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-                            View All Messages
-                          </button>
+                          
+                          {/* Messages Display */}
+                          {thread.messages && thread.messages.length > 0 && (
+                            <div className="mt-4">
+                              <h5 className="font-medium text-gray-100 mb-3">Messages ({thread.messages.length})</h5>
+                              <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {thread.messages
+                                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                  .slice(0, messagesToShow[thread.thread_id] || 10)
+                                  .map((message) => (
+                                    <div
+                                      key={message.id}
+                                      className={`p-3 rounded-lg ${
+                                        message.type === 'outgoing'
+                                          ? 'bg-blue-900/20 border-l-4 border-blue-500'
+                                          : 'bg-gray-700/30 border-l-4 border-gray-500'
+                                      }`}
+                                    >
+                                      <div className="flex justify-between items-start mb-1">
+                                        <span className={`text-xs font-medium ${
+                                          message.type === 'outgoing' ? 'text-blue-300' : 'text-gray-300'
+                                        }`}>
+                                          {message.type === 'outgoing' ? 'Operator' : 'Customer'}
+                                        </span>
+                                        <span className="text-xs text-gray-400">
+                                          {formatMessageDate(message.date)}
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-gray-100 whitespace-pre-wrap">
+                                        {message.message}
+                                      </p>
+                                    </div>
+                                  ))}
+                              </div>
+                              
+                              {/* Load More Button */}
+                              {thread.messages.length > (messagesToShow[thread.thread_id] || 10) && (
+                                <button
+                                  onClick={() => loadMoreMessages(thread.thread_id)}
+                                  className="mt-2 text-blue-400 hover:text-blue-300 text-sm font-medium"
+                                >
+                                  Load More Messages ({thread.messages.length - (messagesToShow[thread.thread_id] || 10)} remaining)
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          
+                          {(!thread.messages || thread.messages.length === 0) && (
+                            <div className="text-gray-400 text-sm italic">
+                              No messages found for this thread.
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>

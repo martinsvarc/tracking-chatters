@@ -228,7 +228,8 @@ app.get('/api/threads', async (req, res) => {
     const { operator, model, start, end } = req.query;
     console.log('Query params:', { operator, model, start, end });
     
-    // Query to fetch threads with calculated fields
+    // Query to fetch threads with calculated fields and messages
+    // Now includes messages array for each thread to display in UI
     let query = `
       SELECT 
         t.thread_id,
@@ -243,7 +244,19 @@ app.get('/api/threads', async (req, res) => {
         t.personalization_score,
         EXTRACT(EPOCH FROM (NOW() - t.last_message)) as last_message_seconds_ago,
         EXTRACT(EPOCH FROM t.avg_response_time) as avg_response_seconds,
-        COUNT(m.id) as message_count
+        COUNT(m.id) as message_count,
+        JSON_AGG(
+          CASE 
+            WHEN m.id IS NOT NULL THEN
+              JSON_BUILD_OBJECT(
+                'id', m.id,
+                'type', m.type,
+                'message', m.message,
+                'date', m.date
+              )
+            ELSE NULL
+          END
+        ) FILTER (WHERE m.id IS NOT NULL) as messages
       FROM threads t
       LEFT JOIN messages m ON t.thread_id = m.thread_id
     `;
@@ -287,7 +300,7 @@ app.get('/api/threads', async (req, res) => {
     const result = await pool.query(query, params);
     console.log(`✅ Query executed successfully, returned ${result.rows.length} rows`);
     
-    // Format the response with calculated fields
+    // Format the response with calculated fields and messages
     const formattedThreads = result.rows.map(row => ({
       thread_id: row.thread_id,
       operator: row.operator,
@@ -300,7 +313,8 @@ app.get('/api/threads', async (req, res) => {
       message_count: parseInt(row.message_count),
       acknowledgment_score: row.acknowledgment_score,
       affection_score: row.affection_score,
-      personalization_score: row.personalization_score
+      personalization_score: row.personalization_score,
+      messages: row.messages || [] // Include messages array, default to empty array if no messages
     }));
     
     console.log('📤 Returning formatted threads:', formattedThreads.length);
@@ -362,16 +376,21 @@ app.post('/api/threads', async (req, res) => {
       console.log('🔄 Starting database transaction');
       await client.query('BEGIN');
 
-      // Upsert thread record
+      // Upsert thread record - explicitly set AI scores to NULL
+      // AI scores are no longer auto-calculated on POST to prevent automatic generation
+      // They should only be set via separate update endpoints or manual input
       const threadUpsertQuery = `
-        INSERT INTO threads (thread_id, operator, model, converted)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO threads (thread_id, operator, model, converted, acknowledgment_score, affection_score, personalization_score)
+        VALUES ($1, $2, $3, $4, NULL, NULL, NULL)
         ON CONFLICT (thread_id) 
         DO UPDATE SET 
           converted = CASE 
             WHEN EXCLUDED.converted = 'Yes' THEN EXCLUDED.converted 
             ELSE threads.converted 
-          END
+          END,
+          acknowledgment_score = NULL,
+          affection_score = NULL,
+          personalization_score = NULL
       `;
       console.log('📝 Upserting thread record');
       await client.query(threadUpsertQuery, [thread_id, operator, model, converted || null]);
@@ -520,47 +539,13 @@ async function updateThreadCalculations(client, threadId) {
     const responded = respondedResult.rows[0]?.responded || 'Yes';
     console.log('✅ Responded status:', responded);
 
-    // Calculate AI scores for all outgoing messages in this thread
-    console.log('🤖 Calculating AI scores');
-    const messagesQuery = `
-      SELECT message 
-      FROM messages 
-      WHERE thread_id = $1 AND type = 'outgoing'
-      ORDER BY date
-    `;
-    const messagesResult = await client.query(messagesQuery, [threadId]);
-    
-    let totalAcknowledgment = 0;
-    let totalAffection = 0;
-    let totalPersonalization = 0;
-    let messageCount = 0;
-    
-    for (const row of messagesResult.rows) {
-      const scores = calculateAIScores(row.message);
-      totalAcknowledgment += scores.acknowledgment;
-      totalAffection += scores.affection;
-      totalPersonalization += scores.personalization;
-      messageCount++;
-    }
-    
-    const avgAcknowledgment = messageCount > 0 ? Math.round(totalAcknowledgment / messageCount) : null;
-    const avgAffection = messageCount > 0 ? Math.round(totalAffection / messageCount) : null;
-    const avgPersonalization = messageCount > 0 ? Math.round(totalPersonalization / messageCount) : null;
-    
-    console.log('🤖 AI Scores calculated:', {
-      avgAcknowledgment,
-      avgAffection,
-      avgPersonalization,
-      messageCount
-    });
-
-    // Update threads table with calculated values
+    // Update threads table with calculated values (excluding AI scores - they remain NULL)
     console.log('💾 Updating threads table with calculated values');
     await client.query(`
       UPDATE threads 
-      SET avg_response_time = $2, responded = $3, acknowledgment_score = $4, affection_score = $5, personalization_score = $6
+      SET avg_response_time = $2, responded = $3
       WHERE thread_id = $1
-    `, [threadId, avgResponseTime, responded, avgAcknowledgment, avgAffection, avgPersonalization]);
+    `, [threadId, avgResponseTime, responded]);
     
     console.log('✅ Thread calculations updated successfully');
 
@@ -659,6 +644,54 @@ app.get('/api/stats', async (req, res) => {
     console.error('❌ Error fetching stats:', error);
     res.status(500).json({ 
       error: 'Failed to fetch stats',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/filters - Fetch unique operators and models for filter options
+// This endpoint provides dynamic filter options for the frontend FilterBar component
+// Replaces hardcoded operator and model lists with real data from the database
+app.get('/api/filters', async (req, res) => {
+  console.log('📥 GET /api/filters called');
+  console.log('Database connected:', dbConnected);
+  console.log('Pool exists:', !!pool);
+  
+  try {
+    if (!pool) {
+      console.error('❌ Database pool not available');
+      return res.status(500).json({ error: 'Database not available' });
+    }
+    
+    // Fetch unique operators and models separately for better performance and clarity
+    // This ensures we get distinct values from each column
+    const operatorsQuery = `SELECT DISTINCT operator FROM threads WHERE operator IS NOT NULL ORDER BY operator`;
+    const modelsQuery = `SELECT DISTINCT model FROM threads WHERE model IS NOT NULL ORDER BY model`;
+    
+    console.log('Executing separate queries for operators and models');
+    
+    const [operatorsResult, modelsResult] = await Promise.all([
+      pool.query(operatorsQuery),
+      pool.query(modelsQuery)
+    ]);
+    
+    const uniqueOperators = operatorsResult.rows.map(row => row.operator);
+    const uniqueModels = modelsResult.rows.map(row => row.model);
+    
+    console.log('📊 Unique operators found:', uniqueOperators);
+    console.log('📊 Unique models found:', uniqueModels);
+    
+    const response = {
+      operators: uniqueOperators,
+      models: uniqueModels
+    };
+    
+    console.log('📤 Returning filter options:', response);
+    res.json(response);
+  } catch (error) {
+    console.error('❌ Error fetching filter options:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch filter options',
       details: error.message 
     });
   }

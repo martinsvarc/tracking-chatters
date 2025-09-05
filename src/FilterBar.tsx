@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface FilterBarProps {
   onFiltersChange: (filters: {
@@ -9,17 +9,76 @@ interface FilterBarProps {
   }) => void;
   onAIClick: () => void;
   onRunAIAnalysis: () => void;
+  onRefreshFilters?: () => void; // Optional callback to refresh filter options
 }
 
-const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRunAIAnalysis }) => {
+const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRunAIAnalysis, onRefreshFilters }) => {
   const [operators, setOperators] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [showOperatorDropdown, setShowOperatorDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  
+  // Dynamic filter options fetched from API
+  const [availableOperators, setAvailableOperators] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(true);
+  const [filterError, setFilterError] = useState<string | null>(null);
 
-  // Mock data - in real app, this would come from API
-  const availableOperators = ['Sarah', 'Emma', 'Jessica', 'Maya', 'Luna'];
-  const availableModels = ['Isabella', 'Sophia', 'Olivia', 'Ava', 'Emma'];
+  // Use relative URLs for Vercel deployment, fallback to localhost for development
+  const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
+
+  // Fetch filter options from API on component mount
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        setIsLoadingFilters(true);
+        setFilterError(null);
+        
+        const response = await fetch(`${API_BASE_URL}/api/filters`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        setAvailableOperators(data.operators || []);
+        setAvailableModels(data.models || []);
+        
+        console.log('✅ Filter options loaded:', { operators: data.operators, models: data.models });
+      } catch (error) {
+        console.error('❌ Error fetching filter options:', error);
+        setFilterError('Failed to load filter options');
+        // Set empty arrays as fallback
+        setAvailableOperators([]);
+        setAvailableModels([]);
+      } finally {
+        setIsLoadingFilters(false);
+      }
+    };
+
+    fetchFilterOptions();
+  }, [API_BASE_URL]);
+
+  // Refresh filter options when onRefreshFilters is called
+  useEffect(() => {
+    if (onRefreshFilters) {
+      const refreshFilters = async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/filters`);
+          if (response.ok) {
+            const data = await response.json();
+            setAvailableOperators(data.operators || []);
+            setAvailableModels(data.models || []);
+          }
+        } catch (error) {
+          console.error('Error refreshing filter options:', error);
+        }
+      };
+      
+      refreshFilters();
+    }
+  }, [onRefreshFilters, API_BASE_URL]);
 
   const handleOperatorToggle = (operator: string) => {
     const newOperators = operators.includes(operator)
@@ -86,17 +145,25 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
             {showOperatorDropdown && (
               <div className="absolute bottom-full left-0 mb-2 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10">
                 <div className="p-2">
-                  {availableOperators.map(operator => (
-                    <label key={operator} className="flex items-center space-x-2 p-2 hover:bg-gray-700 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={operators.includes(operator)}
-                        onChange={() => handleOperatorToggle(operator)}
-                        className="rounded border-gray-500 text-blue-500 focus:ring-blue-400 bg-gray-700"
-                      />
-                      <span className="text-sm text-gray-300">{operator}</span>
-                    </label>
-                  ))}
+                  {isLoadingFilters ? (
+                    <div className="p-2 text-sm text-gray-400">Loading operators...</div>
+                  ) : filterError ? (
+                    <div className="p-2 text-sm text-red-400">Error loading operators</div>
+                  ) : availableOperators.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-400">No operators found</div>
+                  ) : (
+                    availableOperators.map(operator => (
+                      <label key={operator} className="flex items-center space-x-2 p-2 hover:bg-gray-700 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={operators.includes(operator)}
+                          onChange={() => handleOperatorToggle(operator)}
+                          className="rounded border-gray-500 text-blue-500 focus:ring-blue-400 bg-gray-700"
+                        />
+                        <span className="text-sm text-gray-300">{operator}</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -129,17 +196,25 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
             {showModelDropdown && (
               <div className="absolute bottom-full left-0 mb-2 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10">
                 <div className="p-2">
-                  {availableModels.map(model => (
-                    <label key={model} className="flex items-center space-x-2 p-2 hover:bg-gray-700 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={models.includes(model)}
-                        onChange={() => handleModelToggle(model)}
-                        className="rounded border-gray-500 text-blue-500 focus:ring-blue-400 bg-gray-700"
-                      />
-                      <span className="text-sm text-gray-300">{model}</span>
-                    </label>
-                  ))}
+                  {isLoadingFilters ? (
+                    <div className="p-2 text-sm text-gray-400">Loading models...</div>
+                  ) : filterError ? (
+                    <div className="p-2 text-sm text-red-400">Error loading models</div>
+                  ) : availableModels.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-400">No models found</div>
+                  ) : (
+                    availableModels.map(model => (
+                      <label key={model} className="flex items-center space-x-2 p-2 hover:bg-gray-700 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={models.includes(model)}
+                          onChange={() => handleModelToggle(model)}
+                          className="rounded border-gray-500 text-blue-500 focus:ring-blue-400 bg-gray-700"
+                        />
+                        <span className="text-sm text-gray-300">{model}</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
             )}

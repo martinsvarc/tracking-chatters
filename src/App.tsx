@@ -4,6 +4,13 @@ import Table from './Table';
 import FilterBar from './FilterBar';
 import Modal from './Modal';
 
+interface Message {
+  id: number;
+  type: string;
+  message: string;
+  date: string;
+}
+
 interface Thread {
   thread_id: string;
   operator: string;
@@ -17,6 +24,7 @@ interface Thread {
   acknowledgment_score: number | null;
   affection_score: number | null;
   personalization_score: number | null;
+  messages: Message[];
 }
 
 interface Stats {
@@ -143,6 +151,12 @@ const App: React.FC = () => {
     fetchStats();
   };
 
+  // Handle refresh filters (for when new data is added)
+  const handleRefreshFilters = () => {
+    // This will trigger the FilterBar to refresh its options
+    // The FilterBar will handle the actual API call
+  };
+
   // Handle AI modal open/close
   const handleAIClick = () => {
     setModalMode('query');
@@ -201,6 +215,7 @@ const App: React.FC = () => {
           onFiltersChange={handleFiltersChange}
           onAIClick={handleAIClick}
           onRunAIAnalysis={handleRunAIAnalysis}
+          onRefreshFilters={handleRefreshFilters}
         />
 
         {/* Modal Component */}
