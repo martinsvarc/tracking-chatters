@@ -231,6 +231,7 @@ app.get('/api/threads', async (req, res) => {
     
     // Query to fetch threads with calculated fields and messages
     // Now includes messages array for each thread to display in UI
+    // Added real-time responded calculation based on last message type and time
     let query = `
       SELECT 
         t.thread_id,
@@ -239,7 +240,11 @@ app.get('/api/threads', async (req, res) => {
         t.converted,
         t.last_message,
         t.avg_response_time,
-        t.responded,
+        CASE 
+          WHEN lm.type = 'incoming' THEN 'Yes'
+          WHEN lm.type = 'outgoing' AND (NOW() - lm.date) > INTERVAL '3 hours' THEN 'No'
+          ELSE 'No'
+        END as responded,
         t.acknowledgment_score,
         t.affection_score,
         t.personalization_score,
@@ -260,6 +265,11 @@ app.get('/api/threads', async (req, res) => {
         ) FILTER (WHERE m.id IS NOT NULL) as messages
       FROM threads t
       LEFT JOIN messages m ON t.thread_id = m.thread_id
+      LEFT JOIN (
+        SELECT DISTINCT ON (thread_id) thread_id, type, date
+        FROM messages 
+        ORDER BY thread_id, date DESC
+      ) lm ON t.thread_id = lm.thread_id
     `;
     
     const params = [];
@@ -291,7 +301,7 @@ app.get('/api/threads', async (req, res) => {
     }
 
     query += `
-      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.responded, t.acknowledgment_score, t.affection_score, t.personalization_score
+      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.acknowledgment_score, t.affection_score, t.personalization_score, lm.type, lm.date
       ORDER BY t.last_message DESC
     `;
 
@@ -530,15 +540,35 @@ async function updateThreadCalculations(client, threadId) {
       )
       SELECT 
         CASE 
+          WHEN type = 'incoming' THEN 'Yes'
           WHEN type = 'outgoing' AND (NOW() - date) > INTERVAL '3 hours' THEN 'No'
-          ELSE 'Yes'
+          ELSE 'No'
         END as responded
       FROM last_message_info
     `;
     
     const respondedResult = await client.query(respondedQuery, [threadId]);
-    const responded = respondedResult.rows[0]?.responded || 'Yes';
-    console.log('✅ Responded status:', responded);
+    const responded = respondedResult.rows[0]?.responded || 'No';
+    console.log('✅ Responded status calculated:', responded);
+    
+    // Get additional details for logging
+    const detailsQuery = `
+      SELECT type, date, NOW() - date as time_since_message
+      FROM messages
+      WHERE thread_id = $1
+      ORDER BY date DESC
+      LIMIT 1
+    `;
+    const detailsResult = await client.query(detailsQuery, [threadId]);
+    const lastMessage = detailsResult.rows[0];
+    
+    console.log('📊 Responded calculation details:', {
+      threadId,
+      lastMessageType: lastMessage?.type || 'unknown',
+      lastMessageDate: lastMessage?.date || 'unknown',
+      timeSinceMessage: lastMessage?.time_since_message || 'unknown',
+      calculatedResponded: responded
+    });
 
     // Update threads table with calculated values (excluding AI scores - they remain NULL)
     console.log('💾 Updating threads table with calculated values');
