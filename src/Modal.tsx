@@ -10,9 +10,10 @@ interface ModalProps {
     endDate: string;
   };
   mode: 'query' | 'analysis';
+  onAnalysisSuccess?: () => void;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, filters, mode }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, filters, mode, onAnalysisSuccess }) => {
   const [query, setQuery] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +30,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, filters, mode }) => {
 
     setIsLoading(true);
     
-    if (mode === 'query') {
-      // Mock AI response for query mode - in real app, this would call the backend API
-      setTimeout(() => {
-        const mockResponse = `Analyzing selected data based on your query: "${query}"
+    try {
+      if (mode === 'query') {
+        // Mock AI response for query mode - in real app, this would call the backend API
+        setTimeout(() => {
+          const mockResponse = `Analyzing selected data based on your query: "${query}"
 
 Based on the current filters:
 - Operators: ${filters.operators.length > 0 ? filters.operators.join(', ') : 'All'}
@@ -51,40 +53,47 @@ Recommendations:
 3. Monitor GPT-4 performance for potential scaling
 
 This is a mock response. In the real implementation, this would analyze actual filtered data from your database.`;
-
-        setResponse(mockResponse);
-        setIsLoading(false);
-      }, 2000);
-    } else {
-      // Real API call for analysis mode
-      try {
+          setResponse(mockResponse);
+          setIsLoading(false);
+        }, 2000);
+      } else {
+        // Real API call for analysis mode
         const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000');
         
+        const analysisPayload = {
+          filters: {
+            operators: filters.operators,
+            models: filters.models,
+            startDate: filters.startDate,
+            endDate: filters.endDate
+          },
+          numberOfChats: chatCount,
+          threadDepth: threadDepth
+        };
+
+        console.log('🚀 Sending analysis request:', analysisPayload);
+
         const response = await fetch(`${API_BASE_URL}/api/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            filters: {
-              operators: filters.operators,
-              models: filters.models,
-              startDate: filters.startDate,
-              endDate: filters.endDate
-            },
-            numberOfChats: chatCount,
-            threadDepth: threadDepth
-          })
+          body: JSON.stringify(analysisPayload)
         });
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const data = await response.json();
-        
-        if (data.success) {
-          setResponse(`✅ AI Analysis Completed Successfully!
+        const result = await response.json();
+        console.log('✅ Analysis response:', result);
+
+        // Call success callback to refresh data if analysis was successful
+        if (result.webhookSuccess && onAnalysisSuccess) {
+          onAnalysisSuccess();
+        }
+
+        setResponse(`AI Analysis Results
 
 Analysis Parameters:
 - Chat Count: ${chatCount} conversations
@@ -92,37 +101,36 @@ Analysis Parameters:
 - Applied Filters: ${filters.operators.length > 0 ? filters.operators.join(', ') : 'All operators'}, ${filters.models.length > 0 ? filters.models.join(', ') : 'All models'}
 - Timeframe: ${filters.startDate || 'No start date'} to ${filters.endDate || 'No end date'}
 
-Results:
-• Successfully analyzed ${data.threadsAnalyzed} conversation threads
-• Data sent to webhook for AI processing
-• Webhook response status: ${data.webhookStatus}
+Analysis Summary:
+• Successfully sent ${result.threadsAnalyzed || 0} threads to webhook for analysis
+• Payload sent to: https://n8n.automatedsolarbiz.com/webhook/b69cd496-1b6d-42f5-88c8-4af3697c2db8
+• Webhook response: ${result.webhookSuccess ? 'Success' : 'Failed'}
 
-The analysis data has been sent to the AI processing webhook. The system will analyze:
-- Message patterns and conversation flow
-- Response quality and timing
-- Personalization and acknowledgment metrics
-- Conversion indicators and engagement patterns
+Next Steps:
+1. The webhook will process the thread data and perform AI analysis
+2. Analysis results will be returned via the webhook callback
+3. Scores will be automatically updated in the database
+4. Data has been refreshed to show any updated analysis scores
 
-You can expect to receive detailed insights and recommendations once the AI analysis is complete. The results will be available for review in the dashboard.`);
-        } else {
-          setResponse(`❌ Analysis Failed
+Status: ${result.webhookSuccess ? '✅ Analysis sent successfully!' : '❌ Failed to send analysis'}
 
-Error: ${data.error}
-Details: ${data.details || 'No additional details available'}
-
-Please check your connection and try again. If the problem persists, contact support.`);
-        }
-      } catch (error) {
-        console.error('Error running analysis:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        setResponse(`❌ Analysis Failed
-
-Error: ${errorMessage}
-
-Please check your connection and try again. If the problem persists, contact support.`);
-      } finally {
-        setIsLoading(false);
+This analysis has been sent to the external AI processing service for comprehensive evaluation.`);
       }
+    } catch (error) {
+      console.error('❌ Error during analysis:', error);
+      setResponse(`❌ Analysis Failed
+
+Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}
+
+Please check:
+1. Backend server is running
+2. Database connection is active
+3. Webhook URL is accessible
+4. Network connectivity is stable
+
+Try again or contact support if the issue persists.`);
+    } finally {
+      setIsLoading(false);
     }
   };
 

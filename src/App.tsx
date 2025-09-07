@@ -172,6 +172,13 @@ const App: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  // Handle successful analysis - refresh data to show updated scores
+  const handleAnalysisSuccess = () => {
+    // Refresh threads and stats to show any updated analysis scores
+    fetchThreads();
+    fetchStats();
+  };
+
   // Fetch data on component mount and when filters change
   useEffect(() => {
     fetchThreads();
@@ -224,6 +231,7 @@ const App: React.FC = () => {
           onClose={handleModalClose}
           filters={filters}
           mode={modalMode}
+          onAnalysisSuccess={handleAnalysisSuccess}
         />
       </div>
     </div>

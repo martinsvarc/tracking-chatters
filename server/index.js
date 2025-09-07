@@ -1,6 +1,7 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
@@ -708,7 +709,7 @@ app.post('/api/analyze', async (req, res) => {
     const { filters, numberOfChats, threadDepth } = req.body;
     
     if (!numberOfChats || !threadDepth) {
-      console.error('❌ Missing required fields: numberOfChats, threadDepth');
+      console.error('❌ Missing required fields');
       return res.status(400).json({ 
         error: 'Missing required fields: numberOfChats, threadDepth' 
       });
@@ -735,23 +736,23 @@ app.post('/api/analyze', async (req, res) => {
     const params = [];
     const conditions = [];
 
-    // Add filtering conditions based on provided filters
-    if (filters && filters.operators && filters.operators.length > 0) {
+    // Add filtering conditions
+    if (filters.operators && filters.operators.length > 0) {
       conditions.push(`t.operator = ANY($${params.length + 1})`);
       params.push(filters.operators);
     }
     
-    if (filters && filters.models && filters.models.length > 0) {
+    if (filters.models && filters.models.length > 0) {
       conditions.push(`t.model = ANY($${params.length + 1})`);
       params.push(filters.models);
     }
     
-    if (filters && filters.startDate) {
+    if (filters.startDate) {
       conditions.push(`t.last_message >= $${params.length + 1}`);
       params.push(filters.startDate);
     }
     
-    if (filters && filters.endDate) {
+    if (filters.endDate) {
       conditions.push(`t.last_message <= $${params.length + 1}`);
       params.push(filters.endDate);
     }
@@ -760,7 +761,6 @@ app.post('/api/analyze', async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    // Add LIMIT for numberOfChats
     query += ` ORDER BY t.last_message DESC LIMIT $${params.length + 1}`;
     params.push(numberOfChats);
 
@@ -768,12 +768,23 @@ app.post('/api/analyze', async (req, res) => {
     console.log('Query params:', params);
     
     const threadsResult = await pool.query(query, params);
-    console.log(`✅ Found ${threadsResult.rows.length} threads for analysis`);
+    console.log(`✅ Found ${threadsResult.rows.length} threads matching filters`);
     
+    if (threadsResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        threadsAnalyzed: 0,
+        webhookSuccess: true,
+        message: 'No threads found matching the specified filters'
+      });
+    }
+
     // For each thread, fetch messages up to threadDepth
     const threadsWithMessages = [];
     
     for (const thread of threadsResult.rows) {
+      console.log(`📝 Fetching messages for thread: ${thread.thread_id}`);
+      
       const messagesQuery = `
         SELECT type, message, date
         FROM messages 
@@ -784,31 +795,32 @@ app.post('/api/analyze', async (req, res) => {
       
       const messagesResult = await pool.query(messagesQuery, [thread.thread_id, threadDepth]);
       
-      // Format messages for webhook payload
-      const messages = messagesResult.rows.map(msg => ({
-        type: msg.type,
-        message: msg.message,
-        date: msg.date
-      }));
-      
-      threadsWithMessages.push({
+      const threadData = {
         thread_id: thread.thread_id,
         operator: thread.operator,
         model: thread.model,
-        messages: messages,
+        messages: messagesResult.rows.map(msg => ({
+          type: msg.type,
+          message: msg.message,
+          date: msg.date
+        })),
         converted: thread.converted,
         last_message: thread.last_message,
         avg_response_time: thread.avg_response_time ? Math.round(thread.avg_response_time / 1000) : null, // Convert to seconds
         responded: thread.responded
-      });
+      };
+      
+      threadsWithMessages.push(threadData);
     }
-    
-    console.log(`📤 Prepared ${threadsWithMessages.length} threads for webhook`);
-    
+
+    console.log(`📊 Prepared ${threadsWithMessages.length} threads with messages for webhook`);
+
     // Send payload to webhook
     const webhookUrl = 'https://n8n.automatedsolarbiz.com/webhook/b69cd496-1b6d-42f5-88c8-4af3697c2db8';
     
     try {
+      console.log('🚀 Sending payload to webhook:', webhookUrl);
+      
       const webhookResponse = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
@@ -816,32 +828,36 @@ app.post('/api/analyze', async (req, res) => {
         },
         body: JSON.stringify(threadsWithMessages)
       });
-      
+
       if (!webhookResponse.ok) {
-        throw new Error(`Webhook request failed with status: ${webhookResponse.status}`);
+        throw new Error(`Webhook responded with status: ${webhookResponse.status}`);
       }
-      
-      console.log('✅ Successfully sent payload to webhook');
+
+      const webhookResult = await webhookResponse.text();
+      console.log('✅ Webhook response:', webhookResult);
+
+      res.json({
+        success: true,
+        threadsAnalyzed: threadsWithMessages.length,
+        webhookSuccess: true,
+        message: `Successfully sent ${threadsWithMessages.length} threads to webhook for analysis`,
+        webhookResponse: webhookResult
+      });
+
+    } catch (webhookError) {
+      console.error('❌ Webhook error:', webhookError);
       
       res.json({
         success: true,
-        message: 'Analysis sent to webhook successfully',
         threadsAnalyzed: threadsWithMessages.length,
-        webhookStatus: webhookResponse.status
-      });
-      
-    } catch (webhookError) {
-      console.error('❌ Webhook error:', webhookError);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to send data to webhook',
-        details: webhookError.message,
-        threadsPrepared: threadsWithMessages.length
+        webhookSuccess: false,
+        message: `Prepared ${threadsWithMessages.length} threads but failed to send to webhook`,
+        error: webhookError.message
       });
     }
-    
+
   } catch (error) {
-    console.error('❌ Error running analysis:', error);
+    console.error('❌ Error in analyze endpoint:', error);
     res.status(500).json({ 
       error: 'Failed to run analysis',
       details: error.message 
@@ -849,7 +865,7 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// PUT /api/threads/:id - Update thread AI scores
+// PUT /api/threads/:id - Update thread analysis scores
 app.put('/api/threads/:id', async (req, res) => {
   console.log('📥 PUT /api/threads/:id called');
   console.log('Thread ID:', req.params.id);
@@ -858,12 +874,14 @@ app.put('/api/threads/:id', async (req, res) => {
   console.log('Pool exists:', !!pool);
   
   try {
-    const { acknowledgment_score, affection_score, personalization_score } = req.body;
     const threadId = req.params.id;
+    const { acknowledgment_score, affection_score, personalization_score } = req.body;
     
     if (!threadId) {
       console.error('❌ Missing thread ID');
-      return res.status(400).json({ error: 'Missing thread ID' });
+      return res.status(400).json({ 
+        error: 'Missing thread ID' 
+      });
     }
 
     if (!pool) {
@@ -871,69 +889,46 @@ app.put('/api/threads/:id', async (req, res) => {
       return res.status(500).json({ error: 'Database not available' });
     }
 
-    // Validate scores are integers between 0-100 if provided
+    // Validate scores are numbers between 0-100 if provided
     const scores = { acknowledgment_score, affection_score, personalization_score };
     for (const [key, value] of Object.entries(scores)) {
       if (value !== null && value !== undefined) {
-        if (!Number.isInteger(value) || value < 0 || value > 100) {
+        if (typeof value !== 'number' || value < 0 || value > 100) {
           return res.status(400).json({ 
-            error: `${key} must be an integer between 0 and 100` 
+            error: `${key} must be a number between 0 and 100` 
           });
         }
       }
     }
 
-    // Build dynamic UPDATE query based on provided fields
-    const updateFields = [];
-    const params = [];
-    
-    if (acknowledgment_score !== null && acknowledgment_score !== undefined) {
-      updateFields.push(`acknowledgment_score = $${params.length + 1}`);
-      params.push(acknowledgment_score);
-    }
-    
-    if (affection_score !== null && affection_score !== undefined) {
-      updateFields.push(`affection_score = $${params.length + 1}`);
-      params.push(affection_score);
-    }
-    
-    if (personalization_score !== null && personalization_score !== undefined) {
-      updateFields.push(`personalization_score = $${params.length + 1}`);
-      params.push(personalization_score);
-    }
-    
-    if (updateFields.length === 0) {
-      return res.status(400).json({ 
-        error: 'At least one score field must be provided' 
-      });
-    }
-    
-    // Add thread_id parameter
-    params.push(threadId);
-    
+    // Update thread with new scores
     const updateQuery = `
       UPDATE threads 
-      SET ${updateFields.join(', ')}
-      WHERE thread_id = $${params.length}
+      SET 
+        acknowledgment_score = COALESCE($1, acknowledgment_score),
+        affection_score = COALESCE($2, affection_score),
+        personalization_score = COALESCE($3, personalization_score)
+      WHERE thread_id = $4
       RETURNING *
     `;
     
     console.log('Executing update query:', updateQuery);
-    console.log('Query params:', params);
+    console.log('Update params:', [acknowledgment_score, affection_score, personalization_score, threadId]);
     
-    const result = await pool.query(updateQuery, params);
+    const result = await pool.query(updateQuery, [acknowledgment_score, affection_score, personalization_score, threadId]);
     
     if (result.rows.length === 0) {
       console.error('❌ Thread not found:', threadId);
-      return res.status(404).json({ error: 'Thread not found' });
+      return res.status(404).json({ 
+        error: 'Thread not found' 
+      });
     }
-    
+
     const updatedThread = result.rows[0];
     console.log('✅ Thread updated successfully:', updatedThread);
-    
+
     res.json({
       success: true,
-      message: 'Thread updated successfully',
       thread: {
         thread_id: updatedThread.thread_id,
         operator: updatedThread.operator,
@@ -947,7 +942,7 @@ app.put('/api/threads/:id', async (req, res) => {
         responded: updatedThread.responded
       }
     });
-    
+
   } catch (error) {
     console.error('❌ Error updating thread:', error);
     res.status(500).json({ 
