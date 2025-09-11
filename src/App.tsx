@@ -208,18 +208,19 @@ const App: React.FC = () => {
   }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Header Component */}
-        <Header 
-          stats={stats} 
-          onRefresh={handleRefresh} 
-          isLoading={isLoading}
-        />
+    <div className="min-h-screen bg-gray-900">
+      {/* Header Component - Full Width */}
+      <Header 
+        stats={stats} 
+        onRefresh={handleRefresh} 
+        isLoading={isLoading}
+      />
 
+      {/* Main Content Area - Grid Layout */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Error Message */}
         {error && (
-          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6">
+          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6 mb-8">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -234,28 +235,35 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Table Component */}
-        <div className="mb-20">
-          <Table threads={threads} isLoading={isLoading} filters={filters} />
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
+          {/* Filter Sidebar - Left Column */}
+          <div className="lg:col-span-1 order-2 lg:order-1">
+            <div className="sticky top-8">
+              <FilterBar 
+                onFiltersChange={handleFiltersChange}
+                onAIClick={handleAIClick}
+                onRunAIAnalysis={handleRunAIAnalysis}
+                onRefreshFilters={handleRefreshFilters}
+              />
+            </div>
+          </div>
+
+          {/* Table Area - Right Columns */}
+          <div className="lg:col-span-3 order-1 lg:order-2">
+            <Table threads={threads} isLoading={isLoading} filters={filters} />
+          </div>
         </div>
-
-        {/* Filter Bar Component */}
-        <FilterBar 
-          onFiltersChange={handleFiltersChange}
-          onAIClick={handleAIClick}
-          onRunAIAnalysis={handleRunAIAnalysis}
-          onRefreshFilters={handleRefreshFilters}
-        />
-
-        {/* Modal Component */}
-        <Modal 
-          isOpen={isModalOpen}
-          onClose={handleModalClose}
-          filters={filters}
-          mode={modalMode}
-          onAnalysisSuccess={handleAnalysisSuccess}
-        />
       </div>
+
+      {/* Modal Component */}
+      <Modal 
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        filters={filters}
+        mode={modalMode}
+        onAnalysisSuccess={handleAnalysisSuccess}
+      />
     </div>
   );
 };

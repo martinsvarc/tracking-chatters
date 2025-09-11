@@ -41,6 +41,16 @@ interface TableProps {
 type SortField = 'thread_id' | 'operator' | 'last_message' | 'converted';
 type SortDirection = 'asc' | 'desc';
 
+/**
+ * Table Component with Reorganized Headers and Logical Groupings
+ * 
+ * Header Organization:
+ * - Group 1: Basic Thread Information (Thread ID, Operator, Last Message)
+ * - Group 2: Communication Quality Scores (Acknowledgment, Affection, Personalization, Girl Roleplay Skill)
+ * - Group 3: Business Metrics (Sales Ability, Responded, Converted)
+ * 
+ * Visual dividers separate each group for enhanced UI clarity
+ */
 const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
   const [sortField, setSortField] = useState<SortField>('last_message');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -125,47 +135,53 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
 
   return (
     <div className="glow-card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full table-fixed divide-y divide-gray-600">
-          <thead className="bg-gray-800/50">
+      {/* Scrollable Table Container with Fixed Height */}
+      <div className="overflow-x-auto overflow-y-auto h-80 lg:h-96">
+        <table className="w-full table-fixed divide-y divide-gray-600 min-w-[800px]">
+          <thead className="bg-gray-800/50 sticky top-0 z-10">
             <tr>
-              <th className="w-20 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('thread_id')}>
+              {/* Group 1: Basic Thread Information */}
+              <th className="w-1/10 px-4 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('thread_id')}>
                 Thread ID
                 {sortField === 'thread_id' && (
                   <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                 )}
               </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('operator')}>
+              <th className="w-1/10 px-4 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('operator')}>
                 Operator
                 {sortField === 'operator' && (
                   <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                 )}
               </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('last_message')}>
+              <th className="w-1/10 px-4 py-4 text-left text-sm font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 border-r-2 border-gray-600" onClick={() => handleSort('last_message')}>
                 Last Message
                 {sortField === 'last_message' && (
                   <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                 )}
               </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              
+              {/* Group 2: Communication Quality Scores */}
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider">
                 Acknowledgment Score
               </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider">
                 Affection Score
               </th>
-              <th className="w-20 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                Responded
-              </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider">
                 Personalization Score
               </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                Sales Ability
-              </th>
-              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider border-r-2 border-gray-600">
                 Girl Roleplay Skill
               </th>
-              <th className="w-20 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('converted')}>
+              
+              {/* Group 3: Business Metrics */}
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider">
+                Sales Ability
+              </th>
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider">
+                Responded
+              </th>
+              <th className="w-1/10 px-4 py-4 text-center text-sm font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('converted')}>
                 Converted
                 {sortField === 'converted' && (
                   <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
@@ -180,52 +196,57 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
               return (
                 <React.Fragment key={thread.thread_id}>
                   <tr 
-                    className="hover:bg-gray-700/30 cursor-pointer"
+                    className="hover:bg-gray-700/30 cursor-pointer h-12"
                     onClick={() => toggleRowExpansion(thread.thread_id)}
                   >
-                    <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-100">
+                    {/* Group 1: Basic Thread Information */}
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100">
                       {thread.thread_id}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-100">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-100">
                       {thread.operator}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-100">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-100 border-r-2 border-gray-600">
                       {thread.last_message_relative}
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.acknowledgment_score || 0)}`}>
+                    
+                    {/* Group 2: Communication Quality Scores */}
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${formatScore(thread.acknowledgment_score || 0)}`}>
                         {thread.acknowledgment_score || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.affection_score || 0)}`}>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${formatScore(thread.affection_score || 0)}`}>
                         {thread.affection_score || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${formatScore(thread.personalization_score || 0)}`}>
+                        {thread.personalization_score || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center border-r-2 border-gray-600">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${formatScore(thread.girl_roleplay_skill || 0)}`}>
+                        {thread.girl_roleplay_skill || 'N/A'}
+                      </span>
+                    </td>
+                    
+                    {/* Group 3: Business Metrics */}
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${formatScore(thread.sales_ability || 0)}`}>
+                        {thread.sales_ability || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
                         thread.responded === 'Yes' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
                       }`}>
                         {thread.responded}
                       </span>
                     </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.personalization_score || 0)}`}>
-                        {thread.personalization_score || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.sales_ability || 0)}`}>
-                        {thread.sales_ability || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.girl_roleplay_skill || 0)}`}>
-                        {thread.girl_roleplay_skill || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
                         thread.converted === 'Yes' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
                       }`}>
                         {thread.converted || 'No'}
