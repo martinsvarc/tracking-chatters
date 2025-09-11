@@ -6,6 +6,8 @@ interface FilterBarProps {
     models: string[];
     startDate: string;
     endDate: string;
+    lastMessageSince: string;
+    showAnalyzedOnly: boolean;
   }) => void;
   onAIClick: () => void;
   onRunAIAnalysis: () => void;
@@ -15,6 +17,8 @@ interface FilterBarProps {
 const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRunAIAnalysis, onRefreshFilters }) => {
   const [operators, setOperators] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
+  const [lastMessageSince, setLastMessageSince] = useState<string>('all');
+  const [showAnalyzedOnly, setShowAnalyzedOnly] = useState<boolean>(false);
   const [showOperatorDropdown, setShowOperatorDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   
@@ -85,7 +89,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
       ? operators.filter(op => op !== operator)
       : [...operators, operator];
     setOperators(newOperators);
-    updateFilters({ operators: newOperators, models, startDate: '', endDate: '' });
+    updateFilters({ operators: newOperators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly });
   };
 
   const handleModelToggle = (model: string) => {
@@ -93,7 +97,18 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
       ? models.filter(m => m !== model)
       : [...models, model];
     setModels(newModels);
-    updateFilters({ operators, models: newModels, startDate: '', endDate: '' });
+    updateFilters({ operators, models: newModels, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly });
+  };
+
+  const handleLastMessageSinceChange = (value: string) => {
+    setLastMessageSince(value);
+    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince: value, showAnalyzedOnly });
+  };
+
+  const handleShowAnalyzedOnlyToggle = () => {
+    const newShowAnalyzedOnly = !showAnalyzedOnly;
+    setShowAnalyzedOnly(newShowAnalyzedOnly);
+    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly: newShowAnalyzedOnly });
   };
 
 
@@ -102,6 +117,8 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
     models: string[];
     startDate: string;
     endDate: string;
+    lastMessageSince: string;
+    showAnalyzedOnly: boolean;
   }) => {
     onFiltersChange(newFilters);
   };
@@ -109,10 +126,12 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
   const clearFilters = () => {
     setOperators([]);
     setModels([]);
-    onFiltersChange({ operators: [], models: [], startDate: '', endDate: '' });
+    setLastMessageSince('all');
+    setShowAnalyzedOnly(false);
+    onFiltersChange({ operators: [], models: [], startDate: '', endDate: '', lastMessageSince: 'all', showAnalyzedOnly: false });
   };
 
-  const hasActiveFilters = operators.length > 0 || models.length > 0;
+  const hasActiveFilters = operators.length > 0 || models.length > 0 || lastMessageSince !== 'all' || showAnalyzedOnly;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 nav-blur border-t border-gray-600 shadow-lg z-50">
@@ -220,6 +239,79 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
             )}
           </div>
 
+          {/* Last Message Since Filter */}
+          <div className="relative">
+            <select
+              value={lastMessageSince}
+              onChange={(e) => handleLastMessageSinceChange(e.target.value)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors appearance-none cursor-pointer ${
+                lastMessageSince !== 'all' 
+                  ? 'bg-blue-900/30 border-blue-500 text-blue-300' 
+                  : 'bg-gray-700/50 border-gray-500 text-gray-300 hover:bg-gray-600/50'
+              }`}
+            >
+              <option value="all">All Time</option>
+              <option value="30m">Last 30 minutes</option>
+              <option value="60m">Last 60 minutes</option>
+              <option value="2h">Last 2 hours</option>
+              <option value="3h">Last 3 hours</option>
+              <option value="4h">Last 4 hours</option>
+              <option value="5h">Last 5 hours</option>
+              <option value="6h">Last 6 hours</option>
+              <option value="7h">Last 7 hours</option>
+              <option value="8h">Last 8 hours</option>
+              <option value="9h">Last 9 hours</option>
+              <option value="10h">Last 10 hours</option>
+              <option value="11h">Last 11 hours</option>
+              <option value="12h">Last 12 hours</option>
+              <option value="13h">Last 13 hours</option>
+              <option value="14h">Last 14 hours</option>
+              <option value="15h">Last 15 hours</option>
+              <option value="16h">Last 16 hours</option>
+              <option value="17h">Last 17 hours</option>
+              <option value="18h">Last 18 hours</option>
+              <option value="19h">Last 19 hours</option>
+              <option value="20h">Last 20 hours</option>
+              <option value="21h">Last 21 hours</option>
+              <option value="22h">Last 22 hours</option>
+              <option value="23h">Last 23 hours</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="2d">2 days ago</option>
+              <option value="3d">3 days ago</option>
+              <option value="7d">7 days ago</option>
+              <option value="14d">14 days ago</option>
+              <option value="30d">30 days ago</option>
+            </select>
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Show Analyzed Only Toggle */}
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAnalyzedOnly}
+                onChange={handleShowAnalyzedOnlyToggle}
+                className="sr-only"
+              />
+              <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                showAnalyzedOnly ? 'bg-blue-600' : 'bg-gray-600'
+              }`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  showAnalyzedOnly ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </div>
+              <span className={`ml-2 text-sm font-medium ${
+                showAnalyzedOnly ? 'text-blue-300' : 'text-gray-300'
+              }`}>
+                Show Analyzed Only
+              </span>
+            </label>
+          </div>
 
           {/* Clear Filters Button */}
           {hasActiveFilters && (

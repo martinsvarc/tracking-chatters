@@ -226,8 +226,8 @@ app.get('/api/threads', async (req, res) => {
       return res.status(500).json({ error: 'Database not available' });
     }
     
-    const { operator, model, start, end } = req.query;
-    console.log('Query params:', { operator, model, start, end });
+    const { operator, model, start, end, lastMessageSince, analyzedOnly } = req.query;
+    console.log('Query params:', { operator, model, start, end, lastMessageSince, analyzedOnly });
     
     // Query to fetch threads with calculated fields and messages
     // Now includes messages array for each thread to display in UI
@@ -248,6 +248,8 @@ app.get('/api/threads', async (req, res) => {
         t.acknowledgment_score,
         t.affection_score,
         t.personalization_score,
+        COALESCE(t.sales_ability, 0) AS sales_ability,
+        COALESCE(t.girl_roleplay_skill, 0) AS girl_roleplay_skill,
         EXTRACT(EPOCH FROM (NOW() - t.last_message)) as last_message_seconds_ago,
         EXTRACT(EPOCH FROM t.avg_response_time) as avg_response_seconds,
         COUNT(m.id) as message_count,
@@ -295,13 +297,58 @@ app.get('/api/threads', async (req, res) => {
       conditions.push(`t.last_message <= $${params.length + 1}`);
       params.push(end);
     }
+    
+    if (lastMessageSince && lastMessageSince !== 'all') {
+      // Map interval keys to PostgreSQL INTERVAL format
+      const intervalMap = {
+        '30m': '30 minutes',
+        '60m': '60 minutes',
+        '2h': '2 hours',
+        '3h': '3 hours',
+        '4h': '4 hours',
+        '5h': '5 hours',
+        '6h': '6 hours',
+        '7h': '7 hours',
+        '8h': '8 hours',
+        '9h': '9 hours',
+        '10h': '10 hours',
+        '11h': '11 hours',
+        '12h': '12 hours',
+        '13h': '13 hours',
+        '14h': '14 hours',
+        '15h': '15 hours',
+        '16h': '16 hours',
+        '17h': '17 hours',
+        '18h': '18 hours',
+        '19h': '19 hours',
+        '20h': '20 hours',
+        '21h': '21 hours',
+        '22h': '22 hours',
+        '23h': '23 hours',
+        '24h': '24 hours',
+        '2d': '2 days',
+        '3d': '3 days',
+        '7d': '7 days',
+        '14d': '14 days',
+        '30d': '30 days'
+      };
+      
+      const interval = intervalMap[lastMessageSince];
+      if (interval) {
+        conditions.push(`t.last_message >= NOW() - INTERVAL '${interval}'`);
+      }
+    }
+    
+    if (analyzedOnly === 'true') {
+      conditions.push(`t.acknowledgment_score IS NOT NULL AND t.affection_score IS NOT NULL AND t.personalization_score IS NOT NULL`);
+    }
 
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
     query += `
-      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.acknowledgment_score, t.affection_score, t.personalization_score, lm.type, lm.date
+      GROUP BY t.thread_id, t.operator, t.model, t.converted, t.last_message, t.avg_response_time, t.acknowledgment_score, t.affection_score, t.personalization_score, t.sales_ability, t.girl_roleplay_skill, lm.type, lm.date
       ORDER BY t.last_message DESC
     `;
 
@@ -325,6 +372,8 @@ app.get('/api/threads', async (req, res) => {
       acknowledgment_score: row.acknowledgment_score,
       affection_score: row.affection_score,
       personalization_score: row.personalization_score,
+      sales_ability: row.sales_ability,
+      girl_roleplay_skill: row.girl_roleplay_skill,
       messages: row.messages || [] // Include messages array, default to empty array if no messages
     }));
     
@@ -419,8 +468,43 @@ app.post('/api/threads', async (req, res) => {
       console.log('🧮 Updating thread calculations');
       await updateThreadCalculations(client, thread_id);
 
+      // Check if thread meets criteria for automatic webhook analysis
+      console.log('🔍 Checking if thread meets auto-analysis criteria');
+      const messageCountsQuery = `
+        SELECT 
+          COUNT(*) FILTER (WHERE type = 'outgoing') as operator_count,
+          COUNT(*) FILTER (WHERE type = 'incoming') as client_count
+        FROM messages 
+        WHERE thread_id = $1
+      `;
+      
+      const countsResult = await client.query(messageCountsQuery, [thread_id]);
+      const { operator_count, client_count } = countsResult.rows[0];
+      
+      console.log(`📊 Message counts for thread ${thread_id}:`, {
+        operator_count: parseInt(operator_count),
+        client_count: parseInt(client_count)
+      });
+
       await client.query('COMMIT');
       console.log('✅ Transaction committed successfully');
+      
+      // Check if thread meets criteria for automatic webhook analysis
+      // Trigger webhook if >= 3 outgoing (operator) and >= 3 incoming (client) messages
+      if (parseInt(operator_count) >= 3 && parseInt(client_count) >= 3) {
+        console.log(`🚀 Thread ${thread_id} meets criteria for auto-analysis (${operator_count} outgoing, ${client_count} incoming)`);
+        
+        // Send to webhook asynchronously (don't block the response)
+        setImmediate(async () => {
+          try {
+            await sendThreadToWebhook(thread_id);
+          } catch (error) {
+            console.error(`❌ Failed to send thread ${thread_id} to webhook:`, error);
+          }
+        });
+      } else {
+        console.log(`⏳ Thread ${thread_id} does not meet criteria yet (${operator_count} outgoing, ${client_count} incoming)`);
+      }
       
       const response = {
         ...messageResult.rows[0],
@@ -586,6 +670,101 @@ async function updateThreadCalculations(client, threadId) {
   }
 }
 
+// Helper function to send thread data to webhook for automatic analysis
+async function sendThreadToWebhook(threadId) {
+  console.log(`🚀 Sending thread ${threadId} to webhook for automatic analysis`);
+  
+  try {
+    if (!pool) {
+      throw new Error('Database pool not available');
+    }
+
+    // Fetch thread metadata
+    const threadQuery = `
+      SELECT 
+        thread_id,
+        operator,
+        model,
+        converted,
+        last_message,
+        avg_response_time,
+        responded
+      FROM threads 
+      WHERE thread_id = $1
+    `;
+    
+    const threadResult = await pool.query(threadQuery, [threadId]);
+    
+    if (threadResult.rows.length === 0) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+    
+    const thread = threadResult.rows[0];
+    console.log('📊 Thread metadata fetched:', thread);
+
+    // Fetch all messages for this thread
+    const messagesQuery = `
+      SELECT type, message, date
+      FROM messages 
+      WHERE thread_id = $1 
+      ORDER BY date ASC
+    `;
+    
+    const messagesResult = await pool.query(messagesQuery, [threadId]);
+    const messages = messagesResult.rows.map(msg => ({
+      type: msg.type,
+      message: msg.message,
+      date: msg.date
+    }));
+    
+    console.log(`📝 Fetched ${messages.length} messages for thread ${threadId}`);
+
+    // Prepare payload similar to existing analysis payload
+    const payload = {
+      thread_id: thread.thread_id,
+      operator: thread.operator,
+      model: thread.model,
+      messages: messages,
+      converted: thread.converted,
+      last_message: thread.last_message,
+      avg_response_time: thread.avg_response_time ? Math.round(thread.avg_response_time / 1000) : null, // Convert to seconds
+      responded: thread.responded
+    };
+
+    console.log('📦 Prepared webhook payload:', {
+      thread_id: payload.thread_id,
+      operator: payload.operator,
+      model: payload.model,
+      message_count: payload.messages.length,
+      converted: payload.converted,
+      responded: payload.responded
+    });
+
+    // Send to webhook
+    const webhookUrl = 'https://n8n.automatedsolarbiz.com/webhook/b69cd496-1b6d-42f5-88c8-4af3697c2db8';
+    
+    const webhookResponse = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([payload]) // Wrap in array to match existing format
+    });
+
+    if (!webhookResponse.ok) {
+      throw new Error(`Webhook responded with status: ${webhookResponse.status}`);
+    }
+
+    const webhookResult = await webhookResponse.text();
+    console.log(`✅ Successfully sent thread ${threadId} to webhook for analysis`);
+    console.log('📤 Webhook response:', webhookResult);
+
+  } catch (error) {
+    console.error(`❌ Error sending thread ${threadId} to webhook:`, error);
+    throw error;
+  }
+}
+
 // GET /api/stats - Get aggregated statistics for header
 app.get('/api/stats', async (req, res) => {
   console.log('📥 GET /api/stats called');
@@ -593,8 +772,8 @@ app.get('/api/stats', async (req, res) => {
   console.log('Pool exists:', !!pool);
   
   try {
-    const { operator, model, start, end } = req.query;
-    console.log('Query params:', { operator, model, start, end });
+    const { operator, model, start, end, lastMessageSince, analyzedOnly } = req.query;
+    console.log('Query params:', { operator, model, start, end, lastMessageSince, analyzedOnly });
     
     if (!pool) {
       console.error('❌ Database pool not available');
@@ -610,7 +789,9 @@ app.get('/api/stats', async (req, res) => {
         COUNT(CASE WHEN responded = 'Yes' THEN 1 END) as responded_count,
         AVG(acknowledgment_score) as avg_acknowledgment,
         AVG(affection_score) as avg_affection,
-        AVG(personalization_score) as avg_personalization
+        AVG(personalization_score) as avg_personalization,
+        AVG(COALESCE(sales_ability, 0)) as avg_sales_ability,
+        AVG(COALESCE(girl_roleplay_skill, 0)) as avg_girl_roleplay_skill
       FROM threads t
     `;
     
@@ -637,6 +818,51 @@ app.get('/api/stats', async (req, res) => {
       conditions.push(`t.last_message <= $${params.length + 1}`);
       params.push(end);
     }
+    
+    if (lastMessageSince && lastMessageSince !== 'all') {
+      // Map interval keys to PostgreSQL INTERVAL format
+      const intervalMap = {
+        '30m': '30 minutes',
+        '60m': '60 minutes',
+        '2h': '2 hours',
+        '3h': '3 hours',
+        '4h': '4 hours',
+        '5h': '5 hours',
+        '6h': '6 hours',
+        '7h': '7 hours',
+        '8h': '8 hours',
+        '9h': '9 hours',
+        '10h': '10 hours',
+        '11h': '11 hours',
+        '12h': '12 hours',
+        '13h': '13 hours',
+        '14h': '14 hours',
+        '15h': '15 hours',
+        '16h': '16 hours',
+        '17h': '17 hours',
+        '18h': '18 hours',
+        '19h': '19 hours',
+        '20h': '20 hours',
+        '21h': '21 hours',
+        '22h': '22 hours',
+        '23h': '23 hours',
+        '24h': '24 hours',
+        '2d': '2 days',
+        '3d': '3 days',
+        '7d': '7 days',
+        '14d': '14 days',
+        '30d': '30 days'
+      };
+      
+      const interval = intervalMap[lastMessageSince];
+      if (interval) {
+        conditions.push(`t.last_message >= NOW() - INTERVAL '${interval}'`);
+      }
+    }
+    
+    if (analyzedOnly === 'true') {
+      conditions.push(`t.acknowledgment_score IS NOT NULL AND t.affection_score IS NOT NULL AND t.personalization_score IS NOT NULL`);
+    }
 
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
@@ -657,6 +883,8 @@ app.get('/api/stats', async (req, res) => {
     const avgAcknowledgment = row.avg_acknowledgment ? Math.round(row.avg_acknowledgment) : 0;
     const avgAffection = row.avg_affection ? Math.round(row.avg_affection) : 0;
     const avgPersonalization = row.avg_personalization ? Math.round(row.avg_personalization) : 0;
+    const avgSalesAbility = row.avg_sales_ability ? Math.round(row.avg_sales_ability) : 0;
+    const avgGirlRoleplaySkill = row.avg_girl_roleplay_skill ? Math.round(row.avg_girl_roleplay_skill) : 0;
     
     const stats = {
       avgAcknowledgment: avgAcknowledgment,
@@ -664,6 +892,8 @@ app.get('/api/stats', async (req, res) => {
       avgResponseTime: avgResponseTime,
       responseRate: totalChats > 0 ? Math.round((respondedCount / totalChats) * 100) : 0,
       avgPersonalization: avgPersonalization,
+      avgSalesAbility: avgSalesAbility,
+      avgGirlRoleplaySkill: avgGirlRoleplaySkill,
       totalConverted: totalConverted,
       totalChats: totalChats,
       conversionRate: totalChats > 0 ? Math.round((totalConverted / totalChats) * 100) : 0
@@ -905,7 +1135,7 @@ app.put('/api/threads/:id', async (req, res) => {
   
   try {
     const threadId = req.params.id;
-    const { acknowledgment_score, affection_score, personalization_score } = req.body;
+    const { acknowledgment_score, affection_score, personalization_score, sales_ability, girl_roleplay_skill } = req.body;
     
     if (!threadId) {
       console.error('❌ Missing thread ID');
@@ -920,7 +1150,7 @@ app.put('/api/threads/:id', async (req, res) => {
     }
 
     // Validate scores are numbers between 0-100 if provided
-    const scores = { acknowledgment_score, affection_score, personalization_score };
+    const scores = { acknowledgment_score, affection_score, personalization_score, sales_ability, girl_roleplay_skill };
     for (const [key, value] of Object.entries(scores)) {
       if (value !== null && value !== undefined) {
         if (typeof value !== 'number' || value < 0 || value > 100) {
@@ -937,15 +1167,17 @@ app.put('/api/threads/:id', async (req, res) => {
       SET 
         acknowledgment_score = COALESCE($1, acknowledgment_score),
         affection_score = COALESCE($2, affection_score),
-        personalization_score = COALESCE($3, personalization_score)
-      WHERE thread_id = $4
+        personalization_score = COALESCE($3, personalization_score),
+        sales_ability = COALESCE($4, sales_ability),
+        girl_roleplay_skill = COALESCE($5, girl_roleplay_skill)
+      WHERE thread_id = $6
       RETURNING *
     `;
     
     console.log('Executing update query:', updateQuery);
-    console.log('Update params:', [acknowledgment_score, affection_score, personalization_score, threadId]);
+    console.log('Update params:', [acknowledgment_score, affection_score, personalization_score, sales_ability, girl_roleplay_skill, threadId]);
     
-    const result = await pool.query(updateQuery, [acknowledgment_score, affection_score, personalization_score, threadId]);
+    const result = await pool.query(updateQuery, [acknowledgment_score, affection_score, personalization_score, sales_ability, girl_roleplay_skill, threadId]);
     
     if (result.rows.length === 0) {
       console.error('❌ Thread not found:', threadId);
@@ -966,6 +1198,8 @@ app.put('/api/threads/:id', async (req, res) => {
         acknowledgment_score: updatedThread.acknowledgment_score,
         affection_score: updatedThread.affection_score,
         personalization_score: updatedThread.personalization_score,
+        sales_ability: updatedThread.sales_ability,
+        girl_roleplay_skill: updatedThread.girl_roleplay_skill,
         converted: updatedThread.converted,
         last_message: updatedThread.last_message,
         avg_response_time: updatedThread.avg_response_time,

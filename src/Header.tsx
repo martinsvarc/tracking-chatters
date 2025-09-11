@@ -6,6 +6,8 @@ interface HeaderProps {
     avgAffection: number;
     avgResponseTime: number;
     avgPersonalization: number;
+    avgSalesAbility: number;
+    avgGirlRoleplaySkill: number;
     conversionRate: number;
     responseRate: number;
     totalChats: number;
@@ -53,7 +55,7 @@ const Header: React.FC<HeaderProps> = ({ stats, onRefresh, isLoading }) => {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4">
         {/* Average Acknowledgment Score */}
         <div className="stats-card-primary p-4">
           <div className="text-sm font-medium text-gray-300 mb-1">Avg Acknowledgment</div>
@@ -83,6 +85,22 @@ const Header: React.FC<HeaderProps> = ({ stats, onRefresh, isLoading }) => {
           <div className="text-sm font-medium text-gray-300 mb-1">Avg Personalization</div>
           <div className={`text-2xl font-bold stat-glow ${formatScore(stats.avgPersonalization)}`}>
             {stats.avgPersonalization}
+          </div>
+        </div>
+
+        {/* Average Sales Ability */}
+        <div className="stats-card-primary p-4">
+          <div className="text-sm font-medium text-gray-300 mb-1">Avg Sales Ability</div>
+          <div className={`text-2xl font-bold stat-glow ${formatScore(stats.avgSalesAbility)}`}>
+            {stats.avgSalesAbility}
+          </div>
+        </div>
+
+        {/* Average Girl Roleplay Skill */}
+        <div className="stats-card-gold p-4">
+          <div className="text-sm font-medium text-gray-300 mb-1">Avg Girl Roleplay Skill</div>
+          <div className={`text-2xl font-bold stat-glow ${formatScore(stats.avgGirlRoleplaySkill)}`}>
+            {stats.avgGirlRoleplaySkill}
           </div>
         </div>
 

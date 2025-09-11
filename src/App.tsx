@@ -24,6 +24,8 @@ interface Thread {
   acknowledgment_score: number | null;
   affection_score: number | null;
   personalization_score: number | null;
+  sales_ability: number | null;
+  girl_roleplay_skill: number | null;
   messages: Message[];
 }
 
@@ -32,6 +34,8 @@ interface Stats {
   avgAffection: number;
   avgResponseTime: number;
   avgPersonalization: number;
+  avgSalesAbility: number;
+  avgGirlRoleplaySkill: number;
   conversionRate: number;
   responseRate: number;
   totalChats: number;
@@ -43,6 +47,8 @@ interface Filters {
   models: string[];
   startDate: string;
   endDate: string;
+  lastMessageSince: string;
+  showAnalyzedOnly: boolean;
 }
 
 // Use relative URLs for Vercel deployment, fallback to localhost for development
@@ -55,6 +61,8 @@ const App: React.FC = () => {
     avgAffection: 0,
     avgResponseTime: 0,
     avgPersonalization: 0,
+    avgSalesAbility: 0,
+    avgGirlRoleplaySkill: 0,
     conversionRate: 0,
     responseRate: 0,
     totalChats: 0,
@@ -64,7 +72,9 @@ const App: React.FC = () => {
     operators: [],
     models: [],
     startDate: '',
-    endDate: ''
+    endDate: '',
+    lastMessageSince: 'all',
+    showAnalyzedOnly: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,6 +99,12 @@ const App: React.FC = () => {
       }
       if (filters.endDate) {
         params.append('end', filters.endDate);
+      }
+      if (filters.lastMessageSince && filters.lastMessageSince !== 'all') {
+        params.append('lastMessageSince', filters.lastMessageSince);
+      }
+      if (filters.showAnalyzedOnly) {
+        params.append('analyzedOnly', 'true');
       }
 
       const response = await fetch(`${API_BASE_URL}/api/threads?${params.toString()}`);
@@ -124,6 +140,12 @@ const App: React.FC = () => {
       }
       if (filters.endDate) {
         params.append('end', filters.endDate);
+      }
+      if (filters.lastMessageSince && filters.lastMessageSince !== 'all') {
+        params.append('lastMessageSince', filters.lastMessageSince);
+      }
+      if (filters.showAnalyzedOnly) {
+        params.append('analyzedOnly', 'true');
       }
 
       const response = await fetch(`${API_BASE_URL}/api/stats?${params.toString()}`);

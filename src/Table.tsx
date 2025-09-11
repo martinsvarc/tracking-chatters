@@ -20,6 +20,8 @@ interface Thread {
   acknowledgment_score: number | null;
   affection_score: number | null;
   personalization_score: number | null;
+  sales_ability: number | null;
+  girl_roleplay_skill: number | null;
   messages: Message[];
 }
 
@@ -157,6 +159,12 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
               <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                 Personalization Score
               </th>
+              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                Sales Ability
+              </th>
+              <th className="w-24 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                Girl Roleplay Skill
+              </th>
               <th className="w-20 px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50" onClick={() => handleSort('converted')}>
                 Converted
                 {sortField === 'converted' && (
@@ -207,6 +215,16 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
                       </span>
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.sales_ability || 0)}`}>
+                        {thread.sales_ability || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${formatScore(thread.girl_roleplay_skill || 0)}`}>
+                        {thread.girl_roleplay_skill || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         thread.converted === 'Yes' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
                       }`}>
@@ -218,7 +236,7 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
                   {/* Expanded row content */}
                   {isExpanded && (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 bg-gray-800/30">
+                      <td colSpan={10} className="px-3 py-4 bg-gray-800/30">
                         <div className="space-y-4">
                           <h4 className="font-medium text-gray-100 mb-2">Thread Details</h4>
                           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -239,6 +257,14 @@ const Table: React.FC<TableProps> = ({ threads, isLoading, filters }) => {
                             <div>
                               <span className="text-gray-400">Last Message:</span>
                               <span className="text-gray-100 ml-2">{new Date(thread.last_message).toLocaleString()}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Sales Ability:</span>
+                              <span className="text-gray-100 ml-2">{thread.sales_ability || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Girl Roleplay Skill:</span>
+                              <span className="text-gray-100 ml-2">{thread.girl_roleplay_skill || 'N/A'}</span>
                             </div>
                           </div>
                           
