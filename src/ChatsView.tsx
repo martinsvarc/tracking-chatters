@@ -213,11 +213,11 @@ const ChatsView: React.FC = () => {
     setCurrentPage(newPage);
   };
 
-  // Scroll to bottom of chat container
-  const scrollToBottom = () => {
+  // Scroll to top of chat widgets when threads change (newest messages at top)
+  const scrollToTop = () => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
+        top: 0,
         behavior: 'smooth'
       });
     }
@@ -272,9 +272,9 @@ const ChatsView: React.FC = () => {
     setThreads(paginatedThreads);
   }, [allThreads, currentPage]);
 
-  // Scroll to bottom when threads change
+  // Scroll to top when threads change (newest messages at top)
   useEffect(() => {
-    setTimeout(scrollToBottom, 100); // Small delay to ensure DOM is updated
+    setTimeout(scrollToTop, 100); // Small delay to ensure DOM is updated
   }, [threads]);
 
   // Auto-refresh every 5 seconds
@@ -292,9 +292,9 @@ const ChatsView: React.FC = () => {
   const totalPages = Math.ceil(allThreads.length / 10);
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-screen bg-gray-900 text-white overflow-hidden">
       {/* Slim Header with Stats Aligned */}
-      <div className="bg-gray-800 p-2 border-b border-gray-700">
+      <div className="bg-gray-800 p-2 border-b border-gray-700 flex-shrink-0">
         <div className="flex justify-between items-center">
           {/* Left: Title */}
           <h1 className="text-xl font-bold text-white">
@@ -336,8 +336,8 @@ const ChatsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Area with Scroll to Bottom */}
-      <div className="flex-1 overflow-hidden px-4 py-4 pb-20">
+      {/* Main Content Area - No main scrollbar, full height management */}
+      <div className="flex-1 flex flex-col px-4 py-4 pb-20 min-h-0">
         {/* Error Message */}
         {error && (
           <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6 mb-4">
@@ -355,12 +355,9 @@ const ChatsView: React.FC = () => {
           </div>
         )}
 
-        {/* Chat Widgets Container with Reverse Order and Scroll to Bottom */}
-        <div 
-          ref={chatContainerRef}
-          className="overflow-y-auto h-full"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 pb-4">
+        {/* Chat Widgets Container - No main scrollbar, individual widget scrolling */}
+        <div ref={chatContainerRef} className="flex-1 min-h-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 h-full">
           <AnimatePresence>
             {threads.map((thread, index) => (
               <motion.div
@@ -372,7 +369,7 @@ const ChatsView: React.FC = () => {
                 className="bg-gray-800 rounded-lg shadow-lg h-80 flex flex-col"
               >
                 {/* Chat Header - Darker Design */}
-                <div className="bg-gray-700 p-3 rounded-t-lg border-b border-gray-600">
+                <div className="bg-gray-700 p-3 rounded-t-lg border-b border-gray-600 flex-shrink-0">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold text-white text-sm">
@@ -386,12 +383,12 @@ const ChatsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Messages Area - Darker Design */}
+                {/* Messages Area - Newest messages at top, individual scrolling */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {thread.messages && thread.messages.length > 0 ? (
                     thread.messages
-                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                      .slice(-10) // Show last 10 messages
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Sort newest first
+                      .slice(0, 10) // Show first 10 messages (newest)
                       .map((message) => (
                         <div
                           key={message.id}
@@ -421,7 +418,7 @@ const ChatsView: React.FC = () => {
                 </div>
 
                 {/* Chat Footer - Darker Design */}
-                <div className="bg-gray-700 p-2 rounded-b-lg border-t border-gray-600">
+                <div className="bg-gray-700 p-2 rounded-b-lg border-t border-gray-600 flex-shrink-0">
                   <div className="flex items-center justify-between text-xs text-gray-300">
                     <span>{thread.message_count} messages</span>
                     <span className={`px-2 py-1 rounded ${
@@ -450,29 +447,38 @@ const ChatsView: React.FC = () => {
           </div>
         </div>
 
-        {/* Pagination Navigation */}
+        {/* Enhanced Pagination Navigation - Clear page skipping */}
         {allThreads.length > 10 && (
-          <div className="flex justify-end p-2 mt-4">
-            <div className="flex items-center gap-2">
+          <div className="flex justify-end p-2 mt-4 flex-shrink-0">
+            <div className="flex items-center gap-3 bg-gray-800 rounded-lg px-4 py-2">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="bg-gray-700 text-white p-2 rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-700"
+                title="Previous Page"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
+                <span className="text-sm font-medium">Previous</span>
               </button>
               
-              <span className="text-sm text-gray-300 px-3">
-                Page {currentPage} of {totalPages}
-              </span>
+              <div className="flex items-center gap-2 px-3">
+                <span className="text-sm text-gray-300 font-medium">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <span className="text-xs text-gray-400">
+                  ({allThreads.length} total chats)
+                </span>
+              </div>
               
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="bg-gray-700 text-white p-2 rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-700"
+                title="Next Page"
               >
+                <span className="text-sm font-medium">Next</span>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
