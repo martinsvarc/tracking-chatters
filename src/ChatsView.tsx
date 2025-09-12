@@ -237,6 +237,7 @@ const ChatsView: React.FC = () => {
   useEffect(() => {
     fetchThreads();
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   // Auto-refresh every 5 seconds
@@ -247,6 +248,7 @@ const ChatsView: React.FC = () => {
     }, 5000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   return (
