@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FilterBar from './FilterBar';
 
@@ -68,6 +68,8 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 
  */
 const ChatsView: React.FC = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [allThreads, setAllThreads] = useState<Thread[]>([]); // Store all threads for pagination
+  const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState<Stats>({
     avgAcknowledgment: 0,
     avgAffection: 0,
@@ -93,6 +95,7 @@ const ChatsView: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch threads from API with chat view support
   const fetchThreads = async () => {
@@ -134,12 +137,18 @@ const ChatsView: React.FC = () => {
       
       const data = await response.json();
       
-      // Sort by last_message descending and limit to 10
+      // Sort by last_message descending
       const sortedThreads = data
-        .sort((a: Thread, b: Thread) => new Date(b.last_message).getTime() - new Date(a.last_message).getTime())
-        .slice(0, 10);
+        .sort((a: Thread, b: Thread) => new Date(b.last_message).getTime() - new Date(a.last_message).getTime());
       
-      setThreads(sortedThreads);
+      setAllThreads(sortedThreads);
+      
+      // Calculate pagination
+      const startIndex = (currentPage - 1) * 10;
+      const endIndex = startIndex + 10;
+      const paginatedThreads = sortedThreads.slice(startIndex, endIndex);
+      
+      setThreads(paginatedThreads);
     } catch (err) {
       console.error('Error fetching threads:', err);
       setError('Failed to fetch chats. Make sure the backend server is running.');
@@ -199,6 +208,21 @@ const ChatsView: React.FC = () => {
     fetchStats();
   };
 
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // Scroll to bottom of chat container
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   // Handle refresh filters (for when new data is added)
   const handleRefreshFilters = () => {
     // This will trigger the FilterBar to refresh its options
@@ -240,6 +264,19 @@ const ChatsView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  // Update pagination when allThreads changes
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * 10;
+    const endIndex = startIndex + 10;
+    const paginatedThreads = allThreads.slice(startIndex, endIndex);
+    setThreads(paginatedThreads);
+  }, [allThreads, currentPage]);
+
+  // Scroll to bottom when threads change
+  useEffect(() => {
+    setTimeout(scrollToBottom, 100); // Small delay to ensure DOM is updated
+  }, [threads]);
+
   // Auto-refresh every 5 seconds
   useEffect(() => {
     const interval = setInterval(() => {
@@ -251,51 +288,57 @@ const ChatsView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  // Calculate pagination info
+  const totalPages = Math.ceil(allThreads.length / 10);
+  const startIndex = (currentPage - 1) * 10;
+  const endIndex = Math.min(startIndex + 10, allThreads.length);
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      {/* Header with Stats */}
-      <div className="bg-gray-800 p-4 border-b border-gray-700">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gradient-primary">
+      {/* Slim Header with Stats Aligned */}
+      <div className="bg-gray-800 p-2 border-b border-gray-700">
+        <div className="flex justify-between items-center">
+          {/* Left: Title */}
+          <h1 className="text-xl font-bold text-white">
             Chat View - Message Analyzer Platform
           </h1>
-          <button
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="btn-primary flex items-center gap-3 px-4 py-2 text-sm md:text-base"
-          >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* 60-minute Stats */}
-        <div className="flex flex-wrap gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span className="text-gray-300">Operator Messages Last 60 min:</span>
-            <span className="text-blue-400 font-semibold">{stats.operatorMessages60min}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-gray-300">New Chats Last 60 min:</span>
-            <span className="text-green-400 font-semibold">{stats.newChats60min}</span>
+          
+          {/* Right: Stats */}
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span className="text-gray-300">Operator Messages Last 60 min:</span>
+              <span className="text-blue-400 font-semibold">{stats.operatorMessages60min}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-gray-300">New Chats Last 60 min:</span>
+              <span className="text-green-400 font-semibold">{stats.newChats60min}</span>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area with Scroll to Bottom */}
       <div className="flex-1 overflow-hidden px-4 py-4 pb-20">
         {/* Error Message */}
         {error && (
@@ -314,8 +357,12 @@ const ChatsView: React.FC = () => {
           </div>
         )}
 
-        {/* Chat Widgets Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 h-full">
+        {/* Chat Widgets Container with Reverse Order and Scroll to Bottom */}
+        <div 
+          ref={chatContainerRef}
+          className="overflow-y-auto h-full"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 pb-4">
           <AnimatePresence>
             {threads.map((thread, index) => (
               <motion.div
@@ -324,24 +371,24 @@ const ChatsView: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
-                className="bg-white rounded-lg shadow-lg h-80 flex flex-col"
+                className="bg-gray-800 rounded-lg shadow-lg h-80 flex flex-col"
               >
-                {/* Chat Header */}
-                <div className="bg-gray-50 p-3 rounded-t-lg border-b">
+                {/* Chat Header - Darker Design */}
+                <div className="bg-gray-700 p-3 rounded-t-lg border-b border-gray-600">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">
+                      <h3 className="font-semibold text-white text-sm">
                         {thread.operator}
                       </h3>
-                      <p className="text-xs text-gray-500">{thread.model}</p>
+                      <p className="text-xs text-gray-300">{thread.model}</p>
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-300">
                       {formatTimestamp(thread.last_message)}
                     </div>
                   </div>
                 </div>
 
-                {/* Messages Area */}
+                {/* Messages Area - Darker Design */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {thread.messages && thread.messages.length > 0 ? (
                     thread.messages
@@ -355,13 +402,13 @@ const ChatsView: React.FC = () => {
                           <div
                             className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
                               message.type === 'outgoing'
-                                ? 'bg-blue-500 text-white rounded-l-lg'
-                                : 'bg-gray-300 text-black rounded-r-lg'
+                                ? 'bg-blue-700 text-white rounded-l-lg'
+                                : 'bg-gray-600 text-white rounded-r-lg'
                             }`}
                           >
                             <p className="break-words">{formatMessage(message.message)}</p>
                             <p className={`text-xs mt-1 ${
-                              message.type === 'outgoing' ? 'text-blue-100' : 'text-gray-500'
+                              message.type === 'outgoing' ? 'text-blue-200' : 'text-gray-300'
                             }`}>
                               {formatTimestamp(message.date)}
                             </p>
@@ -369,18 +416,18 @@ const ChatsView: React.FC = () => {
                         </div>
                       ))
                   ) : (
-                    <div className="text-center text-gray-500 text-sm py-8">
+                    <div className="text-center text-gray-400 text-sm py-8">
                       No messages yet
                     </div>
                   )}
                 </div>
 
-                {/* Chat Footer */}
-                <div className="bg-gray-50 p-2 rounded-b-lg border-t">
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                {/* Chat Footer - Darker Design */}
+                <div className="bg-gray-700 p-2 rounded-b-lg border-t border-gray-600">
+                  <div className="flex items-center justify-between text-xs text-gray-300">
                     <span>{thread.message_count} messages</span>
                     <span className={`px-2 py-1 rounded ${
-                      thread.responded === 'Yes' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      thread.responded === 'Yes' ? 'bg-green-600 text-green-100' : 'bg-red-600 text-red-100'
                     }`}>
                       {thread.responded}
                     </span>
@@ -390,19 +437,51 @@ const ChatsView: React.FC = () => {
             ))}
           </AnimatePresence>
 
-          {/* Loading/Empty State */}
-          {threads.length === 0 && !isLoading && (
-            <div className="col-span-full flex items-center justify-center h-64">
-              <div className="text-center text-gray-400">
-                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <p className="text-lg font-medium">No chats found</p>
-                <p className="text-sm">Try adjusting your filters or check back later</p>
+            {/* Loading/Empty State */}
+            {threads.length === 0 && !isLoading && (
+              <div className="col-span-full flex items-center justify-center h-64">
+                <div className="text-center text-gray-400">
+                  <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <p className="text-lg font-medium">No chats found</p>
+                  <p className="text-sm">Try adjusting your filters or check back later</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* Pagination Navigation */}
+        {allThreads.length > 10 && (
+          <div className="flex justify-end p-2 mt-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="bg-gray-700 text-white p-2 rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              <span className="text-sm text-gray-300 px-3">
+                Page {currentPage} of {totalPages}
+              </span>
+              
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="bg-gray-700 text-white p-2 rounded hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* FilterBar Component - Fixed Bottom */}
