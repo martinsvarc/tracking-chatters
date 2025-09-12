@@ -226,12 +226,13 @@ app.get('/api/threads', async (req, res) => {
       return res.status(500).json({ error: 'Database not available' });
     }
     
-    const { operator, model, start, end, lastMessageSince, analyzedOnly } = req.query;
-    console.log('Query params:', { operator, model, start, end, lastMessageSince, analyzedOnly });
+    const { operator, model, start, end, lastMessageSince, analyzedOnly, lastMessageType, chatView } = req.query;
+    console.log('Query params:', { operator, model, start, end, lastMessageSince, analyzedOnly, lastMessageType, chatView });
     
     // Query to fetch threads with calculated fields and messages
     // Now includes messages array for each thread to display in UI
     // Added real-time responded calculation based on last message type and time
+    // For chat view, fetch latest 50 messages per thread
     let query = `
       SELECT 
         t.thread_id,
@@ -266,7 +267,16 @@ app.get('/api/threads', async (req, res) => {
           END
         ) FILTER (WHERE m.id IS NOT NULL) as messages
       FROM threads t
-      LEFT JOIN messages m ON t.thread_id = m.thread_id
+      LEFT JOIN messages m ON t.thread_id = m.thread_id ${
+        chatView === 'true' 
+          ? `AND m.id IN (
+              SELECT id FROM messages m2 
+              WHERE m2.thread_id = t.thread_id 
+              ORDER BY m2.date DESC 
+              LIMIT 50
+            )`
+          : ''
+      }
       LEFT JOIN (
         SELECT DISTINCT ON (thread_id) thread_id, type, date
         FROM messages 
@@ -341,6 +351,11 @@ app.get('/api/threads', async (req, res) => {
     
     if (analyzedOnly === 'true') {
       conditions.push(`t.acknowledgment_score IS NOT NULL AND t.affection_score IS NOT NULL AND t.personalization_score IS NOT NULL`);
+    }
+    
+    if (lastMessageType && (lastMessageType === 'incoming' || lastMessageType === 'outgoing')) {
+      conditions.push(`lm.type = $${params.length + 1}`);
+      params.push(lastMessageType);
     }
 
     if (conditions.length > 0) {
@@ -791,7 +806,9 @@ app.get('/api/stats', async (req, res) => {
         AVG(affection_score) as avg_affection,
         AVG(personalization_score) as avg_personalization,
         AVG(COALESCE(sales_ability, 0)) as avg_sales_ability,
-        AVG(COALESCE(girl_roleplay_skill, 0)) as avg_girl_roleplay_skill
+        AVG(COALESCE(girl_roleplay_skill, 0)) as avg_girl_roleplay_skill,
+        (SELECT COUNT(*) FROM messages WHERE date >= NOW() - INTERVAL '60 minutes' AND type = 'outgoing') as operator_messages_60min,
+        (SELECT COUNT(*) FROM messages WHERE date >= NOW() - INTERVAL '60 minutes' AND type = 'incoming') as new_chats_60min
       FROM threads t
     `;
     
@@ -885,6 +902,8 @@ app.get('/api/stats', async (req, res) => {
     const avgPersonalization = row.avg_personalization ? Math.round(row.avg_personalization) : 0;
     const avgSalesAbility = row.avg_sales_ability ? Math.round(row.avg_sales_ability) : 0;
     const avgGirlRoleplaySkill = row.avg_girl_roleplay_skill ? Math.round(row.avg_girl_roleplay_skill) : 0;
+    const operatorMessages60min = parseInt(row.operator_messages_60min) || 0;
+    const newChats60min = parseInt(row.new_chats_60min) || 0;
     
     const stats = {
       avgAcknowledgment: avgAcknowledgment,
@@ -896,7 +915,9 @@ app.get('/api/stats', async (req, res) => {
       avgGirlRoleplaySkill: avgGirlRoleplaySkill,
       totalConverted: totalConverted,
       totalChats: totalChats,
-      conversionRate: totalChats > 0 ? Math.round((totalConverted / totalChats) * 100) : 0
+      conversionRate: totalChats > 0 ? Math.round((totalConverted / totalChats) * 100) : 0,
+      operatorMessages60min: operatorMessages60min,
+      newChats60min: newChats60min
     };
     
     console.log('📤 Returning calculated stats:', stats);

@@ -8,6 +8,7 @@ interface FilterBarProps {
     endDate: string;
     lastMessageSince: string;
     showAnalyzedOnly: boolean;
+    lastMessageType?: string;
   }) => void;
   onAIClick: () => void;
   onRunAIAnalysis: () => void;
@@ -31,6 +32,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
   const [models, setModels] = useState<string[]>([]);
   const [lastMessageSince, setLastMessageSince] = useState<string>('all');
   const [showAnalyzedOnly, setShowAnalyzedOnly] = useState<boolean>(false);
+  const [lastMessageType, setLastMessageType] = useState<string>('');
   const [showOperatorDropdown, setShowOperatorDropdown] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   
@@ -101,7 +103,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
       ? operators.filter(op => op !== operator)
       : [...operators, operator];
     setOperators(newOperators);
-    updateFilters({ operators: newOperators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly });
+    updateFilters({ operators: newOperators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly, lastMessageType });
   };
 
   const handleModelToggle = (model: string) => {
@@ -109,18 +111,24 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
       ? models.filter(m => m !== model)
       : [...models, model];
     setModels(newModels);
-    updateFilters({ operators, models: newModels, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly });
+    updateFilters({ operators, models: newModels, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly, lastMessageType });
   };
 
   const handleLastMessageSinceChange = (value: string) => {
     setLastMessageSince(value);
-    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince: value, showAnalyzedOnly });
+    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince: value, showAnalyzedOnly, lastMessageType });
   };
 
   const handleShowAnalyzedOnlyToggle = () => {
     const newShowAnalyzedOnly = !showAnalyzedOnly;
     setShowAnalyzedOnly(newShowAnalyzedOnly);
-    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly: newShowAnalyzedOnly });
+    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly: newShowAnalyzedOnly, lastMessageType });
+  };
+
+  const handleLastMessageTypeToggle = () => {
+    const newLastMessageType = lastMessageType === 'incoming' ? 'outgoing' : 'incoming';
+    setLastMessageType(newLastMessageType);
+    updateFilters({ operators, models, startDate: '', endDate: '', lastMessageSince, showAnalyzedOnly, lastMessageType: newLastMessageType });
   };
 
 
@@ -131,6 +139,7 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
     endDate: string;
     lastMessageSince: string;
     showAnalyzedOnly: boolean;
+    lastMessageType?: string;
   }) => {
     onFiltersChange(newFilters);
   };
@@ -140,10 +149,11 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
     setModels([]);
     setLastMessageSince('all');
     setShowAnalyzedOnly(false);
-    onFiltersChange({ operators: [], models: [], startDate: '', endDate: '', lastMessageSince: 'all', showAnalyzedOnly: false });
+    setLastMessageType('');
+    onFiltersChange({ operators: [], models: [], startDate: '', endDate: '', lastMessageSince: 'all', showAnalyzedOnly: false, lastMessageType: '' });
   };
 
-  const hasActiveFilters = operators.length > 0 || models.length > 0 || lastMessageSince !== 'all' || showAnalyzedOnly;
+  const hasActiveFilters = operators.length > 0 || models.length > 0 || lastMessageSince !== 'all' || showAnalyzedOnly || lastMessageType !== '';
 
   return (
     <div className="fixed bottom-0 left-0 right-0 w-full bg-gray-700 p-3 z-10 border-t border-gray-600">
@@ -293,6 +303,30 @@ const FilterBar: React.FC<FilterBarProps> = ({ onFiltersChange, onAIClick, onRun
                 showAnalyzedOnly ? 'text-blue-300' : 'text-gray-300'
               }`}>
                 Analyzed
+              </span>
+            </label>
+          </div>
+
+          {/* Last Message Type Toggle */}
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={lastMessageType !== ''}
+                onChange={handleLastMessageTypeToggle}
+                className="sr-only"
+              />
+              <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                lastMessageType !== '' ? 'bg-purple-600' : 'bg-gray-600'
+              }`}>
+                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  lastMessageType !== '' ? 'translate-x-5' : 'translate-x-1'
+                }`} />
+              </div>
+              <span className={`ml-2 text-xs font-medium ${
+                lastMessageType !== '' ? 'text-purple-300' : 'text-gray-300'
+              }`}>
+                {lastMessageType === 'incoming' ? 'Incoming Last' : lastMessageType === 'outgoing' ? 'Outgoing Last' : 'Last Message Type'}
               </span>
             </label>
           </div>
