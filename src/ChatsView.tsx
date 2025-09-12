@@ -290,7 +290,6 @@ const ChatsView: React.FC = () => {
 
   // Calculate pagination info
   const totalPages = Math.ceil(allThreads.length / 10);
-  const startIndex = (currentPage - 1) * 10;
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
