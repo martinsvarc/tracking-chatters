@@ -25,6 +25,7 @@ interface Thread {
   sales_ability: number | null;
   girl_roleplay_skill: number | null;
   messages: Message[];
+  visibleMessages?: number; // Track how many messages are currently visible
 }
 
 interface Stats {
@@ -386,10 +387,11 @@ const ChatsView: React.FC = () => {
                 {/* Messages Area - Newest messages at top, individual scrolling */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {thread.messages && thread.messages.length > 0 ? (
-                    thread.messages
-                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Sort newest first
-                      .slice(0, 10) // Show first 10 messages (newest)
-                      .map((message) => (
+                    <>
+                      {thread.messages
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Sort newest first
+                        .slice(0, thread.visibleMessages || 20) // Show visible messages (default 20)
+                        .map((message) => (
                         <div
                           key={message.id}
                           className={`flex ${message.type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
@@ -409,7 +411,59 @@ const ChatsView: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                      ))
+                      ))}
+                      
+                      {/* Load More / Show All Buttons */}
+                      {(thread.visibleMessages || 20) < thread.messages.length && (
+                        <div className="flex justify-center gap-2 mt-2">
+                          <button
+                            onClick={() => {
+                              const updatedThreads = threads.map(t => 
+                                t.thread_id === thread.thread_id 
+                                  ? { ...t, visibleMessages: (t.visibleMessages || 20) + 20 }
+                                  : t
+                              );
+                              setThreads(updatedThreads);
+                            }}
+                            className="text-xs text-blue-400 hover:text-blue-300 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+                          >
+                            Load More (+20)
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updatedThreads = threads.map(t => 
+                                t.thread_id === thread.thread_id 
+                                  ? { ...t, visibleMessages: t.messages.length }
+                                  : t
+                              );
+                              setThreads(updatedThreads);
+                            }}
+                            className="text-xs text-green-400 hover:text-green-300 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+                          >
+                            Show All ({thread.messages.length})
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Show Less Button - when all messages are visible */}
+                      {(thread.visibleMessages || 20) >= thread.messages.length && thread.messages.length > 20 && (
+                        <div className="flex justify-center mt-2">
+                          <button
+                            onClick={() => {
+                              const updatedThreads = threads.map(t => 
+                                t.thread_id === thread.thread_id 
+                                  ? { ...t, visibleMessages: 20 }
+                                  : t
+                              );
+                              setThreads(updatedThreads);
+                            }}
+                            className="text-xs text-gray-400 hover:text-gray-300 bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+                          >
+                            Show Less
+                          </button>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="text-center text-gray-400 text-sm py-8">
                       No messages yet
