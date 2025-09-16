@@ -273,7 +273,7 @@ app.get('/api/threads', async (req, res) => {
               SELECT id FROM messages m2 
               WHERE m2.thread_id = t.thread_id 
               ORDER BY m2.date DESC 
-              LIMIT 50
+              LIMIT 200
             )`
           : ''
       }
@@ -389,7 +389,8 @@ app.get('/api/threads', async (req, res) => {
       personalization_score: row.personalization_score,
       sales_ability: row.sales_ability,
       girl_roleplay_skill: row.girl_roleplay_skill,
-      messages: row.messages || [] // Include messages array, default to empty array if no messages
+      messages: row.messages || [], // Include messages array, default to empty array if no messages
+      visibleMessages: 20 // Start by showing 20 messages
     }));
     
     console.log('📤 Returning formatted threads:', formattedThreads.length);
